@@ -123,6 +123,8 @@ function echapper(s) {
 
 function correspondAuFiltre(t) {
   const auj = aujourdhui();
+  if (filtreActuel === 'archives') return !!t.archive;
+  if (t.archive) return false;
   switch (filtreActuel) {
     case 'auj':     return !t.fait && (!t.date || t.date <= auj);
     case 'semaine': return !t.fait && (!t.date || t.date <= dansNJours(7));
@@ -133,9 +135,10 @@ function correspondAuFiltre(t) {
 }
 
 function carteHTML(t) {
-  const enRetard = !t.fait && t.date && t.date < aujourdhui();
+  const enRetard = !t.fait && !t.archive && t.date && t.date < aujourdhui();
   const classes = ['tache', 'prio-' + (t.priorite || 'normale')];
   if (t.fait) classes.push('faite');
+  if (t.archive) classes.push('archivee');
   if (enRetard) classes.push('retard');
 
   let badges = '<span class="badge">' + (CATEGORIES[t.categorie] || echapper(t.categorie)) + '</span>';
@@ -146,18 +149,29 @@ function carteHTML(t) {
       (enRetard ? ' — en retard !' : '') + '</span>';
   }
 
+  let actions;
+  if (t.archive) {
+    actions =
+      '<button class="btn-restaurer" title="Remettre dans Terminées">↩️</button>' +
+      '<button class="btn-suppr" title="Supprimer définitivement">🗑️</button>';
+  } else {
+    actions =
+      '<a class="btn-gcal" href="' + lienGoogleAgenda(t) + '" target="_blank" rel="noopener" title="Ajouter à Google Agenda">📅</a>' +
+      '<button class="btn-note" title="Ajouter / modifier la note">📝</button>' +
+      '<button class="btn-modif" title="Modifier">✏️</button>' +
+      (t.fait ? '<button class="btn-archiver" title="Archiver">📦</button>' : '') +
+      '<button class="btn-suppr" title="Supprimer">🗑️</button>';
+  }
+
   return '<article class="' + classes.join(' ') + '" data-id="' + t.id + '">' +
-    '<label class="check"><input type="checkbox" class="cb-fait"' + (t.fait ? ' checked' : '') + '></label>' +
+    '<label class="check"><input type="checkbox" class="cb-fait"' + (t.fait ? ' checked' : '') +
+      (t.archive ? ' disabled' : '') + '></label>' +
     '<div class="corps">' +
       '<h3>' + echapper(t.titre) + '</h3>' +
       '<div class="badges">' + badges + '</div>' +
-      (t.notes ? '<p class="notes">' + echapper(t.notes) + '</p>' : '') +
+      (t.notes ? '<p class="notes">📝 ' + echapper(t.notes) + '</p>' : '') +
     '</div>' +
-    '<div class="actions">' +
-      '<a class="btn-gcal" href="' + lienGoogleAgenda(t) + '" target="_blank" rel="noopener" title="Ajouter à Google Agenda">📅</a>' +
-      '<button class="btn-modif" title="Modifier">✏️</button>' +
-      '<button class="btn-suppr" title="Supprimer">🗑️</button>' +
-    '</div>' +
+    '<div class="actions">' + actions + '</div>' +
   '</article>';
 }
 
@@ -169,7 +183,7 @@ function afficher() {
   document.getElementById('stat-retard').textContent =
     taches.filter(function (t) { return !t.fait && t.date && t.date < auj; }).length;
   document.getElementById('stat-fait').textContent =
-    taches.filter(function (t) { return t.fait; }).length;
+    taches.filter(function (t) { return t.fait && !t.archive; }).length;
 
   const visibles = taches.filter(correspondAuFiltre).sort(function (a, b) {
     const ka = (a.date || '9999-99-99') + ' ' + (a.heure || '99:99');
@@ -179,10 +193,18 @@ function afficher() {
 
   const conteneur = document.getElementById('liste-taches');
   if (visibles.length === 0) {
-    conteneur.innerHTML = '<div class="vide"><span class="gros">🌤️</span>' +
-      'Rien ici pour le moment.<br>Appuyez sur <strong>＋</strong> pour ajouter une tâche.</div>';
+    const message = filtreActuel === 'archives' ? 'Aucune tâche archivée.' :
+                    filtreActuel === 'faites' ? 'Aucune tâche terminée à archiver.' :
+                    'Rien ici pour le moment.<br>Appuyez sur <strong>＋</strong> pour ajouter une tâche.';
+    conteneur.innerHTML = '<div class="vide"><span class="gros">' +
+      (filtreActuel === 'archives' ? '📦' : '🌤️') + '</span>' + message + '</div>';
   } else {
-    conteneur.innerHTML = visibles.map(carteHTML).join('');
+    let html = '';
+    if (filtreActuel === 'faites') {
+      html += '<button id="btn-tout-archiver" class="btn-bandeau">📦 Archiver toutes les terminées (' +
+        visibles.length + ')</button>';
+    }
+    conteneur.innerHTML = html + visibles.map(carteHTML).join('');
   }
 }
 
@@ -448,6 +470,19 @@ document.getElementById('btn-ajouter').addEventListener('click', function () {
 /* ---------- Actions sur les cartes (délégation) ---------- */
 
 document.getElementById('liste-taches').addEventListener('click', function (e) {
+  // Bouton « Archiver toutes les terminées » (hors carte)
+  if (e.target.closest('#btn-tout-archiver')) {
+    const terminees = taches.filter(function (t) { return t.fait && !t.archive; });
+    if (terminees.length &&
+        confirm('Archiver les ' + terminees.length + ' tâche(s) terminée(s) ?')) {
+      const quand = maintenant();
+      terminees.forEach(function (t) { t.archive = true; t.modif = quand; });
+      sauver();
+      afficher();
+    }
+    return;
+  }
+
   const carte = e.target.closest('.tache');
   if (!carte) return;
   const tache = taches.find(function (t) { return t.id === carte.dataset.id; });
@@ -455,6 +490,18 @@ document.getElementById('liste-taches').addEventListener('click', function (e) {
 
   if (e.target.closest('.btn-modif')) {
     ouvrirFormulaire(tache);
+  } else if (e.target.closest('.btn-note')) {
+    ouvrirNote(tache);
+  } else if (e.target.closest('.btn-archiver')) {
+    tache.archive = true;
+    tache.modif = maintenant();
+    sauver();
+    afficher();
+  } else if (e.target.closest('.btn-restaurer')) {
+    tache.archive = false;
+    tache.modif = maintenant();
+    sauver();
+    afficher();
   } else if (e.target.closest('.btn-suppr')) {
     if (confirm('Supprimer la tâche « ' + tache.titre + ' » ?')) {
       supprimees[tache.id] = maintenant();
@@ -463,6 +510,35 @@ document.getElementById('liste-taches').addEventListener('click', function (e) {
       afficher();
     }
   }
+});
+
+/* ---------- Note rapide ---------- */
+
+const dlgNote = document.getElementById('dlg-note');
+let idNote = null;
+
+function ouvrirNote(tache) {
+  idNote = tache.id;
+  document.getElementById('note-titre-tache').textContent = tache.titre;
+  document.getElementById('n-texte').value = tache.notes || '';
+  dlgNote.showModal();
+  document.getElementById('n-texte').focus();
+}
+
+document.getElementById('form-note').addEventListener('submit', function (e) {
+  e.preventDefault();
+  const tache = taches.find(function (t) { return t.id === idNote; });
+  if (tache) {
+    tache.notes = document.getElementById('n-texte').value.trim();
+    tache.modif = maintenant();
+    sauver();
+    afficher();
+  }
+  dlgNote.close();
+});
+
+document.getElementById('btn-note-annuler').addEventListener('click', function () {
+  dlgNote.close();
 });
 
 document.getElementById('liste-taches').addEventListener('change', function (e) {

@@ -46,6 +46,7 @@
   <button class="filtre" data-filtre="semaine">7 jours</button>
   <button class="filtre" data-filtre="toutes">Toutes</button>
   <button class="filtre" data-filtre="faites">Terminées ✓</button>
+  <button class="filtre" data-filtre="archives">📦 Archives</button>
 </nav>
 
 <main id="liste-taches"></main>
@@ -104,6 +105,18 @@
 
     <div class="dlg-boutons">
       <button type="button" id="btn-annuler" class="btn secondaire">Annuler</button>
+      <button type="submit" class="btn primaire">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-note">
+  <form id="form-note" novalidate>
+    <h2>📝 Note</h2>
+    <p id="note-titre-tache" class="aide"></p>
+    <textarea id="n-texte" rows="4" placeholder="Ex : produit vitres à recommander, RDV client reporté…"></textarea>
+    <div class="dlg-boutons">
+      <button type="button" id="btn-note-annuler" class="btn secondaire">Annuler</button>
       <button type="submit" class="btn primaire">Enregistrer</button>
     </div>
   </form>

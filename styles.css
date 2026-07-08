@@ -95,6 +95,7 @@ body {
 /* ----- Cartes de tâches ----- */
 .tache {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: flex-start;
   background: var(--carte);
@@ -130,7 +131,32 @@ body {
 .badge-retard { color: #fecaca; border-color: var(--rouge); font-weight: 600; }
 .notes { margin: 8px 0 0; font-size: 0.85rem; color: var(--texte-2); white-space: pre-wrap; }
 
-.tache .actions { display: flex; flex-direction: column; gap: 6px; }
+.tache .actions {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+  border-top: 1px solid var(--bordure);
+  margin-top: 6px;
+  padding-top: 8px;
+}
+.tache.archivee { opacity: 0.55; border-left-color: var(--texte-2); }
+.tache.archivee h3 { text-decoration: line-through; }
+
+.btn-bandeau {
+  display: block;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 13px;
+  border-radius: var(--rayon);
+  border: 1px dashed var(--accent);
+  background: var(--carte);
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
 .tache .actions a,
 .tache .actions button {
   background: var(--carte-2);
