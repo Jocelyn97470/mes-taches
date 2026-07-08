@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>Mes Tâches Chantier</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-titre">
+    <h1>🧹 Mes Tâches Chantier</h1>
+    <p id="date-jour"></p>
+  </div>
+  <div class="topbar-actions">
+    <button id="btn-export" class="btn-icone" title="Sauvegarder mes tâches (fichier)">💾</button>
+    <button id="btn-import" class="btn-icone" title="Restaurer une sauvegarde">📂</button>
+    <input type="file" id="input-import" accept=".json,application/json" hidden>
+  </div>
+</header>
+
+<section class="stats">
+  <div class="stat">
+    <span id="stat-auj">0</span>
+    <label>Aujourd'hui</label>
+  </div>
+  <div class="stat stat-retard">
+    <span id="stat-retard">0</span>
+    <label>En retard</label>
+  </div>
+  <div class="stat stat-fait">
+    <span id="stat-fait">0</span>
+    <label>Terminées</label>
+  </div>
+</section>
+
+<nav class="filtres" id="filtres">
+  <button class="filtre actif" data-filtre="auj">Aujourd'hui</button>
+  <button class="filtre" data-filtre="semaine">7 jours</button>
+  <button class="filtre" data-filtre="toutes">Toutes</button>
+  <button class="filtre" data-filtre="faites">Terminées ✓</button>
+</nav>
+
+<main id="liste-taches"></main>
+
+<button id="btn-ajouter" class="fab" title="Ajouter une tâche">＋</button>
+
+<dialog id="dlg-tache">
+  <form id="form-tache" novalidate>
+    <h2 id="dlg-titre">Nouvelle tâche</h2>
+
+    <label for="f-titre">Tâche <span class="obligatoire">*</span></label>
+    <input type="text" id="f-titre" placeholder="Ex : Contrôle qualité bureaux Vinci" required>
+
+    <div class="deux-colonnes">
+      <div>
+        <label for="f-categorie">Catégorie</label>
+        <select id="f-categorie">
+          <option value="chantier">🧹 Chantier</option>
+          <option value="equipe">👥 Équipe</option>
+          <option value="qualite">✅ Contrôle qualité</option>
+          <option value="materiel">🧴 Produits / Matériel</option>
+          <option value="client">🤝 Client</option>
+          <option value="admin">📋 Administratif</option>
+        </select>
+      </div>
+      <div>
+        <label for="f-priorite">Priorité</label>
+        <select id="f-priorite">
+          <option value="haute">🔴 Haute</option>
+          <option value="normale" selected>🟡 Normale</option>
+          <option value="basse">🟢 Basse</option>
+        </select>
+      </div>
+    </div>
+
+    <label for="f-site">Site / Chantier</label>
+    <input type="text" id="f-site" placeholder="Ex : Immeuble Le Corail, Niort">
+
+    <div class="trois-colonnes">
+      <div>
+        <label for="f-date">Date</label>
+        <input type="date" id="f-date">
+      </div>
+      <div>
+        <label for="f-heure">Heure</label>
+        <input type="time" id="f-heure">
+      </div>
+      <div>
+        <label for="f-duree">Durée (min)</label>
+        <input type="number" id="f-duree" min="5" step="5" placeholder="60">
+      </div>
+    </div>
+
+    <label for="f-notes">Notes</label>
+    <textarea id="f-notes" rows="3" placeholder="Détails, consignes, produits à prévoir…"></textarea>
+
+    <div class="dlg-boutons">
+      <button type="button" id="btn-annuler" class="btn secondaire">Annuler</button>
+      <button type="submit" class="btn primaire">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
