@@ -3,7 +3,7 @@
 
 'use strict';
 
-const CACHE = 'taches-chantier-v1';
+const CACHE = 'taches-chantier-v2';
 const FICHIERS = [
   './',
   './index.html',
@@ -33,6 +33,8 @@ self.addEventListener('activate', function (e) {
 
 self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;
+  // Ne pas mettre en cache les appels à l'API GitHub (synchro)
+  if (new URL(e.request.url).origin !== self.location.origin) return;
   e.respondWith(
     fetch(e.request).then(function (reponse) {
       const copie = reponse.clone();

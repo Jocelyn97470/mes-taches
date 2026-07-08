@@ -51,18 +51,53 @@ l'application Google Agenda.
 Comme Google Agenda est synchronisé sur tous vos appareils, tout ce qui
 est envoyé dedans se retrouve partout.
 
-## 4. Où sont mes tâches ? (important)
+## 4. Synchro entre appareils (recommandé)
 
-Les tâches sont enregistrées **dans le navigateur de chaque appareil**
-(pas sur un serveur). Conséquences :
+Avec la synchro activée, la MÊME liste de tâches se retrouve sur tous vos
+appareils. Les données sont stockées dans VOTRE dépôt GitHub **privé**
+`Jocelyn97470/mes-taches-data` (personne d'autre ne peut le lire).
 
-- La liste du téléphone et celle de l'ordinateur sont indépendantes.
-- Pour transférer : bouton **💾** (sauvegarder → fichier `.json`),
-  puis bouton **📂** sur l'autre appareil (restaurer).
-- Ne pas « vider les données de navigation » du site, sinon la liste est effacée.
-  Faire un export 💾 de temps en temps par sécurité.
+### Créer la clé d'accès (une seule fois, ~2 minutes)
 
-## 5. Fichiers
+1. Ouvrir : https://github.com/settings/personal-access-tokens/new
+   (se connecter à GitHub si demandé).
+2. **Token name** : `taches-sync`
+3. **Expiration** : choisir la durée la plus longue proposée
+   (il faudra refaire une clé à l'expiration — l'appli vous le dira
+   par un message « Clé refusée »).
+4. **Repository access** : cocher **Only select repositories**
+   → choisir `mes-taches-data` dans la liste.
+5. Ouvrir **Repository permissions** → ligne **Contents** →
+   choisir **Read and write**. (Ne rien toucher d'autre.)
+6. Bouton vert **Generate token** en bas → **copier** la clé affichée
+   (elle commence par `github_pat_`). Elle ne sera montrée qu'une fois :
+   la coller par exemple dans un mail brouillon pour la retrouver
+   depuis le téléphone.
+
+### Activer dans l'appli (sur CHAQUE appareil)
+
+1. Ouvrir l'appli → bouton **⚙️**.
+2. Coller la clé dans « Clé d'accès GitHub ».
+3. **Enregistrer et tester** → « ✅ Connexion réussie ».
+
+Ensuite tout est automatique : chaque ajout / modification / suppression
+est envoyé quelques secondes après, et l'appli récupère les nouveautés à
+chaque ouverture (bouton **🔄** pour forcer une synchro immédiate).
+L'état s'affiche sous la date : « ✓ Synchronisé à HH:MM ».
+
+⚠️ Cette clé ne donne accès QU'AU dépôt `mes-taches-data` (vos tâches),
+à rien d'autre de votre compte. Ne la partagez quand même avec personne.
+
+## 5. Sans synchro : où sont mes tâches ?
+
+Sans synchro, les tâches sont enregistrées **dans le navigateur de chaque
+appareil** : liste du téléphone et du PC indépendantes. Boutons **💾**
+(export fichier) et **📂** (restauration) pour transférer à la main.
+Ne pas « vider les données de navigation » du site, sinon la liste locale
+est effacée (avec la synchro active, rien n'est perdu : tout revient du
+dépôt à la synchro suivante).
+
+## 6. Fichiers
 
 | Fichier | Rôle |
 |---|---|

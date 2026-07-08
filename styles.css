@@ -43,6 +43,11 @@ body {
 }
 .topbar h1 { margin: 0; font-size: 1.25rem; }
 .topbar p { margin: 2px 0 0; color: var(--texte-2); font-size: 0.85rem; text-transform: capitalize; }
+.sync-etat { text-transform: none !important; font-size: 0.75rem !important; }
+.sync-etat.sync-ok { color: var(--vert) !important; }
+.sync-etat.sync-erreur { color: var(--orange) !important; }
+.sync-etat.sync-encours { color: var(--accent) !important; }
+.aide { font-size: 0.82rem; color: var(--texte-2); line-height: 1.45; margin: 8px 0; }
 .topbar-actions { display: flex; gap: 6px; }
 .btn-icone {
   background: var(--carte);

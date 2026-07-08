@@ -1,10 +1,13 @@
 /* ===== Mes Tâches Chantier — logique de l'application =====
-   Données enregistrées dans le navigateur (localStorage).
+   Données enregistrées dans le navigateur (localStorage) ET synchronisées
+   entre appareils via un dépôt GitHub privé (voir LISEZMOI.md).
    Bouton 📅 : ouvre Google Agenda avec l'événement pré-rempli. */
 
 'use strict';
 
 const CLE_STOCKAGE = 'taches-chantier-v1';
+const CLE_SYNC = 'taches-chantier-sync';
+const DEPOT_DEFAUT = 'Jocelyn97470/mes-taches-data';
 
 const CATEGORIES = {
   chantier: '🧹 Chantier',
@@ -15,28 +18,36 @@ const CATEGORIES = {
   admin:    '📋 Administratif'
 };
 
-let taches = charger();
+let taches = [];
+let supprimees = {}; // { id: date ISO de suppression } — pour la synchro
 let filtreActuel = 'auj';
 let idEnCours = null; // null = nouvelle tâche, sinon id de la tâche modifiée
 
-/* ---------- Stockage ---------- */
+/* ---------- Stockage local ---------- */
 
 function charger() {
   try {
-    const brut = localStorage.getItem(CLE_STOCKAGE);
-    const liste = brut ? JSON.parse(brut) : [];
-    return Array.isArray(liste) ? liste : [];
-  } catch (e) {
-    return [];
-  }
+    const brut = JSON.parse(localStorage.getItem(CLE_STOCKAGE) || 'null');
+    if (Array.isArray(brut)) {           // ancien format (liste simple)
+      taches = brut;
+    } else if (brut && typeof brut === 'object') {
+      taches = Array.isArray(brut.taches) ? brut.taches : [];
+      supprimees = (brut.supprimees && typeof brut.supprimees === 'object') ? brut.supprimees : {};
+    }
+  } catch (e) { /* stockage illisible : on repart de zéro */ }
 }
 
 function sauver() {
-  localStorage.setItem(CLE_STOCKAGE, JSON.stringify(taches));
+  localStorage.setItem(CLE_STOCKAGE, JSON.stringify({ taches: taches, supprimees: supprimees }));
+  planifierSync();
 }
 
 function nouvelId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function maintenant() {
+  return new Date().toISOString();
 }
 
 /* ---------- Dates ---------- */
@@ -175,7 +186,203 @@ function afficher() {
   }
 }
 
-/* ---------- Formulaire ---------- */
+/* ---------- Synchronisation GitHub ----------
+   Principe : un fichier taches.json dans un dépôt privé.
+   À chaque synchro : on lit le fichier, on fusionne avec la liste locale
+   (la version la plus récente de chaque tâche gagne, les suppressions
+   sont mémorisées), puis on réécrit le fichier si besoin. */
+
+let configSync = null;
+try { configSync = JSON.parse(localStorage.getItem(CLE_SYNC) || 'null'); } catch (e) {}
+
+let syncTimer = null;
+let syncEnCours = false;
+
+function majEtatSync(texte, classe) {
+  const el = document.getElementById('sync-etat');
+  el.textContent = texte;
+  el.className = 'sync-etat' + (classe ? ' ' + classe : '');
+}
+
+function horodatage(t) {
+  return t.modif || t.cree || '';
+}
+
+function fusionner(tachesA, supprA, tachesB, supprB) {
+  // Union des suppressions (date la plus récente par id)
+  const suppr = {};
+  [supprA, supprB].forEach(function (s) {
+    for (const id in s) {
+      if (!suppr[id] || s[id] > suppr[id]) suppr[id] = s[id];
+    }
+  });
+
+  // La version la plus récente de chaque tâche gagne
+  const parId = {};
+  tachesA.concat(tachesB).forEach(function (t) {
+    if (!t || !t.id) return;
+    if (!parId[t.id] || horodatage(t) > horodatage(parId[t.id])) parId[t.id] = t;
+  });
+
+  const resultat = [];
+  for (const id in parId) {
+    // Tâche supprimée après sa dernière modification → elle reste supprimée
+    if (suppr[id] && suppr[id] >= horodatage(parId[id])) continue;
+    resultat.push(parId[id]);
+  }
+  return { taches: resultat, supprimees: suppr };
+}
+
+function versBase64(s) {
+  return btoa(unescape(encodeURIComponent(s)));
+}
+
+function depuisBase64(b) {
+  return decodeURIComponent(escape(atob(b.replace(/\s/g, ''))));
+}
+
+function synchroniser(manuel) {
+  if (!configSync || !configSync.token) {
+    majEtatSync('Synchro non configurée — appuyez sur ⚙️', '');
+    if (manuel) ouvrirReglages();
+    return Promise.resolve(false);
+  }
+  if (syncEnCours) return Promise.resolve(false);
+  syncEnCours = true;
+  majEtatSync('Synchronisation…', 'sync-encours');
+
+  const api = 'https://api.github.com/repos/' + configSync.depot + '/contents/taches.json';
+  const entetes = {
+    'Authorization': 'Bearer ' + configSync.token,
+    'Accept': 'application/vnd.github+json'
+  };
+
+  let sha = null;
+  let contenuDistant = null;
+
+  return fetch(api + '?cacheBust=' + Date.now(), { headers: entetes, cache: 'no-store' })
+    .then(function (rep) {
+      if (rep.status === 200) return rep.json();
+      if (rep.status === 404) return null; // fichier pas encore créé
+      throw new Error(rep.status === 401 ? 'Clé (token) refusée' :
+                      rep.status === 403 ? 'Accès refusé au dépôt' :
+                      'Erreur GitHub ' + rep.status);
+    })
+    .then(function (json) {
+      let distant = { taches: [], supprimees: {} };
+      if (json) {
+        sha = json.sha;
+        contenuDistant = depuisBase64(json.content);
+        try {
+          const d = JSON.parse(contenuDistant);
+          if (d && typeof d === 'object') {
+            distant.taches = Array.isArray(d.taches) ? d.taches : [];
+            distant.supprimees = d.supprimees || {};
+          }
+        } catch (e) { /* fichier distant illisible : on le réécrira */ }
+      }
+
+      const fusion = fusionner(taches, supprimees, distant.taches, distant.supprimees);
+      taches = fusion.taches;
+      supprimees = fusion.supprimees;
+      localStorage.setItem(CLE_STOCKAGE, JSON.stringify({ taches: taches, supprimees: supprimees }));
+      afficher();
+
+      const nouveau = JSON.stringify({ taches: taches, supprimees: supprimees, maj: maintenant() }, null, 1);
+      // Rien de nouveau à envoyer ? On s'arrête là (pas de commit inutile).
+      if (contenuDistant) {
+        try {
+          const d = JSON.parse(contenuDistant);
+          const identique = JSON.stringify({ t: d.taches, s: d.supprimees }) ===
+                            JSON.stringify({ t: taches, s: supprimees });
+          if (identique) return { ok: true };
+        } catch (e) {}
+      }
+
+      const corps = { message: 'Synchro du ' + new Date().toLocaleString('fr-FR'), content: versBase64(nouveau) };
+      if (sha) corps.sha = sha;
+      return fetch(api, { method: 'PUT', headers: entetes, body: JSON.stringify(corps) })
+        .then(function (rep) {
+          if (!rep.ok) throw new Error('Écriture refusée (' + rep.status + ')');
+          return { ok: true };
+        });
+    })
+    .then(function () {
+      const h = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      majEtatSync('✓ Synchronisé à ' + h, 'sync-ok');
+      syncEnCours = false;
+      return true;
+    })
+    .catch(function (err) {
+      majEtatSync('⚠️ Synchro impossible : ' + (err.message || 'hors ligne ?'), 'sync-erreur');
+      syncEnCours = false;
+      return false;
+    });
+}
+
+function planifierSync() {
+  if (!configSync || !configSync.token) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(function () { synchroniser(false); }, 2500);
+}
+
+/* ---------- Réglages de la synchro ---------- */
+
+const dlgReglages = document.getElementById('dlg-reglages');
+
+function ouvrirReglages() {
+  document.getElementById('r-token').value = configSync ? (configSync.token || '') : '';
+  document.getElementById('r-depot').value = (configSync && configSync.depot) ? configSync.depot : DEPOT_DEFAUT;
+  document.getElementById('r-message').textContent = '';
+  dlgReglages.showModal();
+}
+
+document.getElementById('btn-reglages').addEventListener('click', ouvrirReglages);
+
+document.getElementById('btn-sync').addEventListener('click', function () {
+  synchroniser(true);
+});
+
+document.getElementById('form-reglages').addEventListener('submit', function (e) {
+  e.preventDefault();
+  const token = document.getElementById('r-token').value.trim();
+  const depot = document.getElementById('r-depot').value.trim() || DEPOT_DEFAUT;
+  const message = document.getElementById('r-message');
+
+  if (!token) {
+    message.textContent = 'Collez votre clé (token) GitHub ci-dessus.';
+    return;
+  }
+
+  configSync = { token: token, depot: depot };
+  localStorage.setItem(CLE_SYNC, JSON.stringify(configSync));
+  message.textContent = 'Test de connexion en cours…';
+
+  synchroniser(false).then(function (ok) {
+    if (ok) {
+      message.textContent = '✅ Connexion réussie ! La synchro est active.';
+      setTimeout(function () { dlgReglages.close(); }, 1200);
+    } else {
+      message.textContent = '❌ Échec — vérifiez la clé (token) et réessayez. ' +
+        'Voir le LISEZMOI pour créer la clé correctement.';
+    }
+  });
+});
+
+document.getElementById('btn-reglages-annuler').addEventListener('click', function () {
+  dlgReglages.close();
+});
+
+document.getElementById('btn-sync-off').addEventListener('click', function () {
+  if (confirm('Désactiver la synchronisation sur cet appareil ? (Vos tâches restent sur l\'appareil.)')) {
+    configSync = null;
+    localStorage.removeItem(CLE_SYNC);
+    majEtatSync('Synchro non configurée — appuyez sur ⚙️', '');
+    dlgReglages.close();
+  }
+});
+
+/* ---------- Formulaire de tâche ---------- */
 
 const dlg = document.getElementById('dlg-tache');
 const form = document.getElementById('form-tache');
@@ -211,7 +418,8 @@ form.addEventListener('submit', function (e) {
     date: document.getElementById('f-date').value,
     heure: document.getElementById('f-heure').value,
     duree: document.getElementById('f-duree').value,
-    notes: document.getElementById('f-notes').value.trim()
+    notes: document.getElementById('f-notes').value.trim(),
+    modif: maintenant()
   };
 
   if (idEnCours) {
@@ -220,7 +428,7 @@ form.addEventListener('submit', function (e) {
   } else {
     donnees.id = nouvelId();
     donnees.fait = false;
-    donnees.cree = new Date().toISOString();
+    donnees.cree = maintenant();
     taches.push(donnees);
   }
 
@@ -249,6 +457,7 @@ document.getElementById('liste-taches').addEventListener('click', function (e) {
     ouvrirFormulaire(tache);
   } else if (e.target.closest('.btn-suppr')) {
     if (confirm('Supprimer la tâche « ' + tache.titre + ' » ?')) {
+      supprimees[tache.id] = maintenant();
       taches = taches.filter(function (t) { return t.id !== tache.id; });
       sauver();
       afficher();
@@ -262,6 +471,7 @@ document.getElementById('liste-taches').addEventListener('change', function (e) 
   const tache = taches.find(function (t) { return t.id === carte.dataset.id; });
   if (tache) {
     tache.fait = e.target.checked;
+    tache.modif = maintenant();
     sauver();
     afficher();
   }
@@ -304,6 +514,8 @@ document.getElementById('input-import').addEventListener('change', function (e) 
       if (!Array.isArray(liste)) throw new Error('format');
       if (confirm('Remplacer vos ' + taches.length + ' tâche(s) actuelle(s) par les ' +
                   liste.length + ' tâche(s) du fichier ?')) {
+        const quand = maintenant();
+        liste.forEach(function (t) { if (!t.modif) t.modif = quand; });
         taches = liste;
         sauver();
         afficher();
@@ -323,7 +535,14 @@ document.getElementById('date-jour').textContent =
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
   });
 
+charger();
 afficher();
+synchroniser(false);
+
+// Re-synchronise quand on revient sur l'appli (retour d'un autre onglet / réveil du téléphone)
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') synchroniser(false);
+});
 
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   navigator.serviceWorker.register('sw.js').catch(function () { /* hors ligne indisponible */ });

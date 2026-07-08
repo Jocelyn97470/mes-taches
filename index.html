@@ -15,8 +15,11 @@
   <div class="topbar-titre">
     <h1>🧹 Mes Tâches Chantier</h1>
     <p id="date-jour"></p>
+    <p id="sync-etat" class="sync-etat"></p>
   </div>
   <div class="topbar-actions">
+    <button id="btn-sync" class="btn-icone" title="Synchroniser maintenant">🔄</button>
+    <button id="btn-reglages" class="btn-icone" title="Réglages de la synchronisation">⚙️</button>
     <button id="btn-export" class="btn-icone" title="Sauvegarder mes tâches (fichier)">💾</button>
     <button id="btn-import" class="btn-icone" title="Restaurer une sauvegarde">📂</button>
     <input type="file" id="input-import" accept=".json,application/json" hidden>
@@ -102,6 +105,31 @@
     <div class="dlg-boutons">
       <button type="button" id="btn-annuler" class="btn secondaire">Annuler</button>
       <button type="submit" class="btn primaire">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-reglages">
+  <form id="form-reglages" novalidate>
+    <h2>⚙️ Synchronisation entre appareils</h2>
+    <p class="aide">
+      Vos tâches sont enregistrées dans votre dépôt GitHub privé et se retrouvent
+      sur tous vos appareils. Il faut une clé d'accès (token) — la marche à suivre
+      pour la créer est dans le fichier LISEZMOI (section « Synchro »).
+    </p>
+
+    <label for="r-token">Clé d'accès GitHub (token)</label>
+    <input type="password" id="r-token" placeholder="github_pat_…" autocomplete="off">
+
+    <label for="r-depot">Dépôt de données</label>
+    <input type="text" id="r-depot" placeholder="Jocelyn97470/mes-taches-data">
+
+    <p id="r-message" class="aide"></p>
+
+    <div class="dlg-boutons">
+      <button type="button" id="btn-sync-off" class="btn secondaire">Désactiver</button>
+      <button type="button" id="btn-reglages-annuler" class="btn secondaire">Annuler</button>
+      <button type="submit" class="btn primaire">Enregistrer et tester</button>
     </div>
   </form>
 </dialog>
