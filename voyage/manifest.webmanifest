@@ -1,0 +1,18 @@
+{
+  "name": "Voyage en famille",
+  "short_name": "Voyage",
+  "description": "Organiser le voyage : valises, achats avec prix, activités et budget.",
+  "lang": "fr",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0d1424",
+  "theme_color": "#b45309",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

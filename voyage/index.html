@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#b45309">
+<title>Voyage en famille</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-titre">
+    <h1 id="titre-voyage">🌴 Voyage en famille</h1>
+    <p id="sous-titre"></p>
+  </div>
+  <div class="topbar-actions">
+    <button id="btn-reglages" class="btn-icone" title="Réglages du voyage">⚙️</button>
+    <button id="btn-export" class="btn-icone" title="Sauvegarder (fichier)">💾</button>
+    <button id="btn-import" class="btn-icone" title="Restaurer une sauvegarde">📂</button>
+    <input type="file" id="input-import" accept=".json,application/json" hidden>
+  </div>
+</header>
+
+<section class="stats">
+  <div class="stat">
+    <span id="stat-jours">–</span>
+    <label id="stat-jours-label">Départ</label>
+  </div>
+  <div class="stat stat-valise">
+    <span id="stat-valise">0%</span>
+    <label>Valises prêtes</label>
+  </div>
+  <div class="stat stat-budget">
+    <span id="stat-depense">0 €</span>
+    <label>Déjà dépensé</label>
+  </div>
+</section>
+
+<nav class="filtres" id="onglets">
+  <button class="filtre actif" data-onglet="valises">🧳 Valises</button>
+  <button class="filtre" data-onglet="achats">🛒 Achats</button>
+  <button class="filtre" data-onglet="activites">🎡 Activités</button>
+  <button class="filtre" data-onglet="budget">💰 Budget</button>
+</nav>
+
+<main id="contenu"></main>
+
+<button id="btn-ajouter" class="fab" title="Ajouter">＋</button>
+
+<!-- ===== Affaire à emporter ===== -->
+<dialog id="dlg-affaire">
+  <form id="form-affaire" novalidate>
+    <h2 id="dlg-affaire-titre">Nouvelle chose à emporter</h2>
+
+    <label for="fa-nom">Quoi ? <span class="obligatoire">*</span></label>
+    <input type="text" id="fa-nom" placeholder="Ex : Crème solaire" required>
+
+    <div class="deux-colonnes">
+      <div>
+        <label for="fa-categorie">Catégorie</label>
+        <select id="fa-categorie"></select>
+      </div>
+      <div>
+        <label for="fa-personne">Pour qui ?</label>
+        <select id="fa-personne"></select>
+      </div>
+    </div>
+
+    <div class="dlg-boutons">
+      <button type="button" class="btn secondaire btn-annuler">Annuler</button>
+      <button type="submit" class="btn primaire">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ===== Achat ===== -->
+<dialog id="dlg-achat">
+  <form id="form-achat" novalidate>
+    <h2 id="dlg-achat-titre">Nouvel achat</h2>
+
+    <label for="fh-nom">Quoi ? <span class="obligatoire">*</span></label>
+    <input type="text" id="fh-nom" placeholder="Ex : Brassards pour la piscine" required>
+
+    <div class="deux-colonnes">
+      <div>
+        <label for="fh-prix">Prix (€)</label>
+        <input type="text" id="fh-prix" inputmode="decimal" placeholder="Ex : 12,50">
+      </div>
+      <div>
+        <label for="fh-statut">Statut</label>
+        <select id="fh-statut">
+          <option value="a-acheter">🛒 À acheter</option>
+          <option value="achete">✅ Déjà acheté</option>
+        </select>
+      </div>
+    </div>
+
+    <label for="fh-note">Note</label>
+    <input type="text" id="fh-note" placeholder="Ex : magasin, taille, marque…">
+
+    <div class="dlg-boutons">
+      <button type="button" class="btn secondaire btn-annuler">Annuler</button>
+      <button type="submit" class="btn primaire">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ===== Activité ===== -->
+<dialog id="dlg-activite">
+  <form id="form-activite" novalidate>
+    <h2 id="dlg-activite-titre">Nouvelle activité</h2>
+
+    <label for="fv-nom">Activité <span class="obligatoire">*</span></label>
+    <input type="text" id="fv-nom" placeholder="Ex : Parc aquatique, visite, resto…" required>
+
+    <label for="fv-lieu">Lieu</label>
+    <input type="text" id="fv-lieu" placeholder="Ex : Aqualand, Saint-Gilles">
+
+    <div class="trois-colonnes">
+      <div>
+        <label for="fv-date">Date</label>
+        <input type="date" id="fv-date">
+      </div>
+      <div>
+        <label for="fv-heure">Heure</label>
+        <input type="time" id="fv-heure">
+      </div>
+      <div>
+        <label for="fv-prix">Prix total (€)</label>
+        <input type="text" id="fv-prix" inputmode="decimal" placeholder="Ex : 45">
+      </div>
+    </div>
+
+    <label for="fv-statut">Statut</label>
+    <select id="fv-statut">
+      <option value="idee">💡 Idée</option>
+      <option value="reserve">📌 Réservé</option>
+      <option value="paye">✅ Payé</option>
+    </select>
+
+    <label for="fv-notes">Notes</label>
+    <textarea id="fv-notes" rows="3" placeholder="Horaires, à prévoir, lien de réservation…"></textarea>
+
+    <div class="dlg-boutons">
+      <button type="button" class="btn secondaire btn-annuler">Annuler</button>
+      <button type="submit" class="btn primaire">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ===== Réglages ===== -->
+<dialog id="dlg-reglages">
+  <form id="form-reglages" novalidate>
+    <h2>⚙️ Mon voyage</h2>
+
+    <label for="fr-destination">Destination</label>
+    <input type="text" id="fr-destination" placeholder="Ex : La Réunion, Espagne…">
+
+    <div class="deux-colonnes">
+      <div>
+        <label for="fr-depart">Date de départ</label>
+        <input type="date" id="fr-depart">
+      </div>
+      <div>
+        <label for="fr-retour">Date de retour</label>
+        <input type="date" id="fr-retour">
+      </div>
+    </div>
+
+    <div class="trois-colonnes">
+      <div>
+        <label for="fr-nom1">Moi</label>
+        <input type="text" id="fr-nom1" placeholder="Moi">
+      </div>
+      <div>
+        <label for="fr-nom2">Fille 1</label>
+        <input type="text" id="fr-nom2" placeholder="Prénom">
+      </div>
+      <div>
+        <label for="fr-nom3">Fille 2</label>
+        <input type="text" id="fr-nom3" placeholder="Prénom">
+      </div>
+    </div>
+
+    <label for="fr-budget">Budget total prévu (€)</label>
+    <input type="text" id="fr-budget" inputmode="decimal" placeholder="Ex : 1500">
+
+    <div class="dlg-boutons">
+      <button type="button" class="btn secondaire btn-annuler">Annuler</button>
+      <button type="submit" class="btn primaire">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
