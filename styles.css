@@ -389,3 +389,30 @@ dialog input:focus, dialog select:focus, dialog textarea:focus {
   border-top: 1px solid var(--bordure);
 }
 #dlg-voix #v-valider { flex: 2; }
+
+/* ===== Pilote auto ===== */
+.voix-reglages { display: flex; gap: 6px; align-items: center; }
+.btn-mode {
+  background: var(--carte-2);
+  border: 1px solid var(--bordure);
+  border-radius: 999px;
+  color: var(--texte-2);
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-mode.actif { border-color: var(--accent); color: var(--accent); }
+.v-carte.v-question { border-color: var(--orange); box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35); }
+.v-puce-aucun { border-style: solid; border-color: var(--bordure); color: var(--texte-2); }
+.v-decision { color: var(--accent); }
+.toast.avec-bouton { pointer-events: auto; display: flex; align-items: center; gap: 12px; }
+.toast-bouton {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}

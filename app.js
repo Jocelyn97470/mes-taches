@@ -529,8 +529,11 @@ document.getElementById('btn-ajouter').addEventListener('click', function () {
 
 function ajouterTaches(liste) {
   const quand = maintenant();
+  const ids = [];
   liste.forEach(function (d) {
     const chantier = chantierDuLexique(d.site);
+    const id = nouvelId();
+    ids.push(id);
     taches.push({
       titre: d.titre,
       categorie: d.categorie || 'chantier',
@@ -542,12 +545,22 @@ function ajouterTaches(liste) {
       duree: d.duree || '',
       notes: d.notes || '',
       modif: quand,
-      id: nouvelId(),
+      id: id,
       fait: false,
       cree: quand,
       source: 'dictee'
     });
   });
+  sauver();
+  afficher();
+  return ids;
+}
+
+// « Annuler » juste après un enregistrement automatique
+function retirerTaches(ids) {
+  const quand = maintenant();
+  ids.forEach(function (id) { supprimees[id] = quand; });
+  taches = taches.filter(function (t) { return ids.indexOf(t.id) < 0; });
   sauver();
   afficher();
 }

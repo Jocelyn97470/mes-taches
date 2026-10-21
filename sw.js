@@ -3,7 +3,7 @@
 
 'use strict';
 
-const CACHE = 'taches-chantier-v4';
+const CACHE = 'taches-chantier-v5';
 const FICHIERS = [
   './',
   './index.html',

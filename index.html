@@ -65,8 +65,11 @@
 <dialog id="dlg-voix">
   <div class="voix">
     <div class="voix-entete">
-      <h2>🎤 Dictez vos tâches</h2>
-      <button type="button" id="v-parole" class="btn-icone" title="Confirmation à voix haute">🔊</button>
+      <h2>🎤 Dictez</h2>
+      <div class="voix-reglages">
+        <button type="button" id="v-mode" class="btn-mode">⚡ Auto</button>
+        <button type="button" id="v-parole" class="btn-icone" title="Réponses à voix haute">🔊</button>
+      </div>
     </div>
 
     <button type="button" id="v-micro" class="v-micro">
@@ -76,7 +79,8 @@
     <p id="v-aide" class="aide">
       Parlez naturellement : « demain à 9 h appeler Cotta, c'est urgent,
       puis vendredi contrôle qualité Néolia Belfort ». Dites <strong>puis</strong>
-      ou <strong>ensuite</strong> entre deux tâches.
+      entre deux tâches. Je note seule quand vous vous taisez ; je ne vous pose
+      une question qu'en cas de doute. « <strong>Annule</strong> » pour tout oublier.
     </p>
 
     <textarea id="v-texte" rows="3" placeholder="Votre dictée s'écrit ici (vous pouvez la corriger)…"></textarea>

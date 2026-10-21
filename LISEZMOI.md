@@ -13,8 +13,26 @@ d'envoyer chaque tâche vers Google Agenda en un clic (bouton 📅).
   propre (« il faut que j'appelle… » → « Appeler… »), date, heure, durée,
   priorité (« urgent », « pas pressé »), catégorie et **chantier reconnu**
   (avec son adresse et la titulaire).
-- Si un mot désigne plusieurs chantiers (« Néolia », « Cotta »), l'appli
-  propose de choisir. Tout reste modifiable avant **Ajouter**.
+- **⚡ Pilote auto (par défaut)** : dès que vous vous taisez, l'appli
+  **enregistre seule** — pas besoin de dire « enregistre » ni de toucher l'écran.
+  Elle décide comme vous le feriez :
+  - « Néolia » + « Atifa » → Néolia Belfort (Atifa en est la titulaire) ;
+    « Opsat » + « Vesoul » → Opsat Vesoul ; sinon le chantier « Néolia » utilisé
+    dans vos tâches des 14 derniers jours ;
+  - « à 9 h » dit à midi, sans jour → demain 9 h ; « à 2 h » → 14 h ;
+    « dans 2 heures », « dans 20 minutes » → heure calculée ;
+  - chaque décision est affichée (🧠) et redite à voix haute.
+- **Validation seulement en cas de vrai doute** : une seule question précise,
+  à l'oral (« Pour Contrôle Néolia, quel chantier Néolia ? ») — répondez à
+  voix haute (« la gare », « Petite Hollande », « le premier », « aucun ») ou
+  touchez le chantier. Pas de réponse (en voiture…) → la tâche est enregistrée
+  quand même, sans chantier précis. Rien n'est jamais perdu.
+- Dire « **annule** » à la fin → rien n'est noté. « **Enregistre** » ou
+  « **c'est tout** » → enregistré sans attendre. Bouton **Annuler** quelques
+  secondes après chaque enregistrement.
+- Toucher une fiche pendant la dictée = vous reprenez la main (plus
+  d'enregistrement seul pour cette dictée). Bouton **⚡ Auto / ✋ Relecture**
+  pour choisir de toujours valider vous-même.
 - L'appli confirme à voix haute ce qu'elle a noté (bouton 🔊 / 🔇 pour couper).
 - Mots compris : aujourd'hui, ce soir, demain, après-demain, lundi… dimanche,
   « mardi de la semaine prochaine », le 16 novembre, le 28/10, dans 3 jours,

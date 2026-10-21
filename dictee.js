@@ -1,7 +1,11 @@
 /* ===== Mes Tâches Chantier — dictée vocale et lecture de la journée =====
-   🎤 : on parle, l'appli écrit et SYNTHÉTISE en direct (titre, date, heure,
-        priorité, catégorie, chantier), on relit, on valide.
-   🔊 Ma journée : l'appli lit à voix haute les tâches du jour (pratique en voiture). */
+   🎤 « Pilote auto » (par défaut) : on parle, l'appli comprend et ENREGISTRE SEULE
+      dès qu'on se tait. Elle ne demande une validation qu'en cas de vrai doute
+      (ex. « Néolia » sans autre indice) : UNE question, à l'oral, réponse à l'oral.
+      Dire « annule » à la fin pour tout oublier, « enregistre » / « c'est tout »
+      pour enregistrer sans attendre. Bouton « Annuler » quelques secondes après.
+   ✋ « Relecture » : on relit et on valide soi-même.
+   🔊 Ma journée : lecture à voix haute des tâches du jour (pratique en voiture). */
 
 'use strict';
 
@@ -9,6 +13,9 @@
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const ANDROID = /Android/i.test(navigator.userAgent);
   const CLE_PAROLE = 'taches-chantier-parole';
+  const CLE_AUTO = 'taches-chantier-auto';
+  const SILENCE_MS = 2000;      // fin de dictée après ce silence (ordinateur)
+  const ATTENTE_AUTO_S = 2;     // secondes avant l'enregistrement automatique
 
   const dlg = document.getElementById('dlg-voix');
   const zoneTexte = document.getElementById('v-texte');
@@ -18,29 +25,57 @@
   const aide = document.getElementById('v-aide');
   const btnValider = document.getElementById('v-valider');
   const btnParole = document.getElementById('v-parole');
+  const btnMode = document.getElementById('v-mode');
 
-  let parole = true;
-  try { parole = localStorage.getItem(CLE_PAROLE) !== 'non'; } catch (e) {}
+  function lire(cle, defaut) { try { const v = localStorage.getItem(cle); return v == null ? defaut : v; } catch (e) { return defaut; } }
+  function ecrire(cle, v) { try { localStorage.setItem(cle, v); } catch (e) {} }
+
+  let parole = lire(CLE_PAROLE, 'oui') !== 'non';
+  let auto = lire(CLE_AUTO, 'oui') !== 'non';
 
   let rec = null;
   let ecoute = false;
-  let base = '';          // texte déjà présent quand on relance le micro
-  let brouillons = [];    // tâches comprises
-  let modifs = {};        // corrections faites à la main, par numéro de carte
-  let minuterie = null;
+  let mode = 'dictee';       // 'dictee' ou 'reponse' (réponse à une question)
+  let base = '';             // texte déjà présent quand on relance le micro
+  let brouillons = [];       // tâches comprises
+  let modifs = {};           // corrections à la main, par numéro de carte
+  let minuterie = null;      // analyse pendant la frappe
+  let silence = null;        // détection de fin de dictée
+  let compte = null;         // compte à rebours de l'enregistrement auto
+  let action = '';           // commande vocale entendue : 'enregistrer' | 'annuler'
+  let pilote = true;         // l'appli décide seule pour cette dictée (coupé si on touche)
+  let question = null;       // { i: numéro de carte } quand on attend une réponse
 
   function lexiqueActuel() {
     return (typeof lexique !== 'undefined') ? lexique : null; // défini dans app.js
   }
 
+  // Chantiers des tâches récentes (pour trancher « Cotta » ou « Néolia » tout seuls)
+  function historique() {
+    const limite = new Date(Date.now() - 14 * 86400000).toISOString(); // 14 derniers jours
+    return taches.filter(function (t) { return t.site && (t.modif || t.cree || '') >= limite; })
+      .sort(function (a, b) { return (b.modif || b.cree || '') < (a.modif || a.cree || '') ? -1 : 1; })
+      .map(function (t) { return t.site; });
+  }
+
   /* ---------- Petits outils ---------- */
 
-  function toast(texte) {
+  function toast(texte, bouton, surClic) {
     const el = document.getElementById('toast');
-    el.textContent = texte;
+    el.innerHTML = '';
+    el.appendChild(document.createTextNode(texte));
+    if (bouton) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'toast-bouton';
+      b.textContent = bouton;
+      b.addEventListener('click', function () { el.classList.remove('visible'); surClic(); });
+      el.appendChild(b);
+    }
+    el.classList.toggle('avec-bouton', !!bouton);
     el.classList.add('visible');
     clearTimeout(toast.t);
-    toast.t = setTimeout(function () { el.classList.remove('visible'); }, 3500);
+    toast.t = setTimeout(function () { el.classList.remove('visible'); }, bouton ? 8000 : 3500);
   }
 
   function voixFrancaise() {
@@ -50,18 +85,24 @@
   }
   if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = function () {};
 
-  // Lit plusieurs phrases à la suite (une phrase par énoncé : évite les coupures sur Android)
-  function dire(phrases) {
-    if (!('speechSynthesis' in window)) return;
+  // Lit plusieurs phrases à la suite ; « ensuite » est appelé à la fin de la lecture
+  function dire(phrases, ensuite) {
+    const liste = [].concat(phrases).filter(Boolean);
+    if (!('speechSynthesis' in window) || !liste.length) { if (ensuite) ensuite(); return; }
     speechSynthesis.cancel();
     const v = voixFrancaise();
-    [].concat(phrases).filter(Boolean).forEach(function (p) {
+    let fini = false;
+    function fin() { if (!fini) { fini = true; if (ensuite) ensuite(); } }
+    liste.forEach(function (p, i) {
       const u = new SpeechSynthesisUtterance(p);
       u.lang = 'fr-FR';
       if (v) u.voice = v;
       u.rate = 1.05;
+      if (i === liste.length - 1) { u.onend = fin; u.onerror = fin; }
       speechSynthesis.speak(u);
     });
+    // Filet de sécurité si le navigateur ne signale pas la fin de lecture
+    if (ensuite) setTimeout(fin, 1500 + liste.join(' ').length * 75);
   }
 
   function pluriel(n, mot) { return n + ' ' + mot + (n > 1 ? 's' : ''); }
@@ -81,6 +122,10 @@
     return Object.assign({}, brouillons[i], modifs[i] || {});
   }
 
+  function doute(t) {
+    return !t.retire && !t.site && !t.siteChoisi && t.candidats && t.candidats.length > 0;
+  }
+
   function infoChantier(t) {
     const ch = AnalyseDictee.chantierParNom(t.site, lexiqueActuel());
     if (!ch) return '';
@@ -92,19 +137,30 @@
     return morceaux.length ? '<p class="v-info">' + morceaux.join('<br>') + '</p>' : '';
   }
 
+  const RAISONS = {
+    'indices': 'chantier déduit de la phrase',
+    'historique': 'chantier de vos dernières tâches',
+    'demain-heure-passee': 'heure passée → demain',
+    'heure-apres-midi': 'heure de l\'après-midi'
+  };
+
   function carteVoix(i) {
     const t = effective(i);
     if (t.retire) return '';
     let choix = '';
-    if (!t.site && t.candidats && t.candidats.length) {
-      choix = '<div class="v-choix"><span>Quel chantier ?</span>' +
+    if (doute(t)) {
+      choix = '<div class="v-choix"><span>' + (question && question.i === i ? '❓ ' : '') + 'Quel chantier ?</span>' +
         t.candidats.slice(0, 12).map(function (n) {
           return '<button type="button" class="v-puce" data-site="' + echapper(n) + '">' + echapper(n) + '</button>';
-        }).join('') + '</div>';
+        }).join('') +
+        '<button type="button" class="v-puce v-puce-aucun" data-site="">Aucun</button></div>';
     }
+    const decisions = [];
+    if (t.site && t.siteDeduit && !(modifs[i] && modifs[i].site)) decisions.push(RAISONS[t.siteDeduit]);
+    (t.logique || []).forEach(function (l) { if (RAISONS[l]) decisions.push(RAISONS[l]); });
     const agents = (t.agents && t.agents.length)
       ? '<p class="v-info">👥 ' + t.agents.map(echapper).join(', ') + '</p>' : '';
-    return '<div class="v-carte prio-' + t.priorite + '" data-i="' + i + '">' +
+    return '<div class="v-carte prio-' + t.priorite + (question && question.i === i ? ' v-question' : '') + '" data-i="' + i + '">' +
       '<div class="v-ligne">' +
         '<input class="v-titre" data-champ="titre" value="' + echapper(t.titre) + '" aria-label="Titre">' +
         '<button type="button" class="v-retirer" title="Retirer cette tâche">✕</button>' +
@@ -117,6 +173,7 @@
       '</div>' +
       '<input class="v-site" data-champ="site" list="liste-chantiers" autocomplete="off" placeholder="📍 Chantier (facultatif)" value="' + echapper(t.site) + '">' +
       choix + '<div class="v-infos">' + infoChantier(t) + agents + '</div>' +
+      (decisions.length ? '<p class="v-info v-decision">🧠 ' + decisions.map(echapper).join(' · ') + '</p>' : '') +
       (t.duree ? '<p class="v-info">⏱ ' + echapper(t.duree) + ' min</p>' : '') +
       (t.notes ? '<p class="v-info">📝 ' + echapper(t.notes) + '</p>' : '') +
     '</div>';
@@ -127,10 +184,11 @@
       .filter(function (t) { return !t.retire && t.titre && t.titre.trim(); });
   }
 
-  function majBoutonValider() {
+  function majBoutonValider(secondes) {
     const n = aValider().length;
     btnValider.disabled = n === 0;
-    btnValider.textContent = n === 0 ? 'Ajouter' : 'Ajouter ' + pluriel(n, 'tâche');
+    btnValider.textContent = n === 0 ? 'Ajouter' :
+      (secondes != null ? 'Enregistrer maintenant (' + secondes + ')' : 'Ajouter ' + pluriel(n, 'tâche'));
   }
 
   function afficherApercu() {
@@ -146,18 +204,32 @@
   }
 
   function analyserTexte() {
-    brouillons = AnalyseDictee.analyser(zoneTexte.value, { lexique: lexiqueActuel() });
+    const cmd = AnalyseDictee.commandeFinale(zoneTexte.value);
+    brouillons = AnalyseDictee.analyser(cmd.texte, {
+      lexique: lexiqueActuel(), historique: historique(), maintenant: Date.now()
+    });
     afficherApercu();
+    return cmd.action;
   }
 
-  // Corrections à la main dans les fiches
+  /* ---------- Reprise en main : dès qu'on touche une fiche, l'appli n'enregistre plus seule ---------- */
+
+  function reprendreLaMain() {
+    if (!pilote && !compte) return;
+    pilote = false;
+    annulerCompte();
+    majMicro();
+  }
+
   function surSaisie(e) {
     const champ = e.target.dataset ? e.target.dataset.champ : null;
     const carte = e.target.closest ? e.target.closest('.v-carte') : null;
     if (!champ || !carte) return;
+    reprendreLaMain();
     const i = Number(carte.dataset.i);
     modifs[i] = modifs[i] || {};
     modifs[i][champ] = e.target.value;
+    if (champ === 'site') modifs[i].siteChoisi = true;
     if (champ === 'priorite') carte.className = 'v-carte prio-' + e.target.value;
     if (champ === 'site') {
       const infos = carte.querySelector('.v-infos');
@@ -167,20 +239,26 @@
   }
   apercu.addEventListener('input', surSaisie);
   apercu.addEventListener('change', surSaisie);
+  apercu.addEventListener('focusin', function (e) {
+    if (e.target.matches('input, select')) reprendreLaMain();
+  });
+
   apercu.addEventListener('click', function (e) {
     const carte = e.target.closest('.v-carte');
     if (!carte) return;
     const i = Number(carte.dataset.i);
     if (e.target.closest('.v-retirer')) {
+      reprendreLaMain();
       modifs[i] = Object.assign(modifs[i] || {}, { retire: true });
       afficherApercu();
     } else if (e.target.closest('.v-puce')) {
-      modifs[i] = Object.assign(modifs[i] || {}, { site: e.target.dataset.site });
-      afficherApercu();
+      // Répondre à la question en touchant : le pilote auto continue
+      choisirChantier(i, e.target.dataset.site);
     }
   });
 
   zoneTexte.addEventListener('input', function () {
+    reprendreLaMain();
     clearTimeout(minuterie);
     minuterie = setTimeout(analyserTexte, 400);
   });
@@ -189,52 +267,72 @@
 
   function majMicro(texte) {
     btnMicro.classList.toggle('actif', ecoute);
-    etat.textContent = texte || (ecoute ? 'Je vous écoute… (appuyez pour arrêter)' :
-      (zoneTexte.value.trim() ? '🎤 Appuyez pour continuer à parler' : '🎤 Appuyez pour parler'));
+    if (texte) { etat.textContent = texte; return; }
+    if (ecoute) {
+      etat.textContent = mode === 'reponse' ? 'Je vous écoute… (dites le chantier)' :
+        (auto && pilote ? 'Je vous écoute… je note dès que vous vous taisez' : 'Je vous écoute… (appuyez pour arrêter)');
+    } else {
+      etat.textContent = zoneTexte.value.trim() ? '🎤 Appuyez pour continuer à parler' : '🎤 Appuyez pour parler';
+    }
   }
 
   function arreter() {
+    clearTimeout(silence);
     if (rec && ecoute) { try { rec.stop(); } catch (e) {} }
     ecoute = false;
     majMicro();
   }
 
-  function demarrer() {
-    if (!SR) {
-      zoneTexte.focus();
-      return;
-    }
-    if (ecoute) { arreter(); return; }
+  function ecouter(pour) {
+    if (!SR) { zoneTexte.focus(); return; }
     if ('speechSynthesis' in window) speechSynthesis.cancel();
-
+    annulerCompte();
+    mode = pour || 'dictee';
     rec = new SR();
     rec.lang = 'fr-FR';
     rec.interimResults = true;
-    rec.continuous = !ANDROID; // Android : une phrase à la fois (sinon le texte se répète)
+    rec.continuous = !ANDROID && mode === 'dictee'; // Android : une phrase à la fois
     rec.maxAlternatives = 1;
     base = zoneTexte.value.trim();
+    let entendu = '';
 
     rec.onresult = function (e) {
-      let tout = '';
-      for (let i = 0; i < e.results.length; i++) tout += ' ' + e.results[i][0].transcript.trim();
-      zoneTexte.value = ((base ? base + ' ' : '') + tout.trim()).replace(/\s+/g, ' ');
-      analyserTexte();
+      let tout = '', final = true;
+      for (let i = 0; i < e.results.length; i++) {
+        tout += ' ' + e.results[i][0].transcript.trim();
+        if (!e.results[i].isFinal) final = false;
+      }
+      entendu = tout.trim();
+      if (mode === 'dictee') {
+        zoneTexte.value = ((base ? base + ' ' : '') + entendu).replace(/\s+/g, ' ');
+        action = analyserTexte();
+        if (action && final) { arreter(); finDeDictee(); return; }
+      } else {
+        majMicro('« ' + entendu + ' »');
+      }
+      // Fin de dictée quand on se tait (pilote auto)
+      clearTimeout(silence);
+      if (auto && pilote) silence = setTimeout(function () { if (ecoute) { try { rec.stop(); } catch (er) {} } }, SILENCE_MS);
     };
     rec.onerror = function (e) {
       ecoute = false;
+      clearTimeout(silence);
       const messages = {
         'not-allowed': '🔒 Micro refusé : autorisez le micro pour ce site, puis réessayez.',
         'service-not-allowed': '🔒 Micro refusé : autorisez le micro pour ce site, puis réessayez.',
-        'no-speech': "Je n'ai rien entendu — appuyez et parlez.",
+        'no-speech': mode === 'reponse' ? 'Je n\'ai rien entendu — touchez le chantier voulu.' : "Je n'ai rien entendu — appuyez et parlez.",
         'audio-capture': 'Aucun micro trouvé sur cet appareil.',
         'network': 'La dictée a besoin d\'internet — vous pouvez écrire ci-dessous.'
       };
       majMicro(messages[e.error] || '🎤 Appuyez pour parler');
+      if (mode === 'reponse' && e.error === 'no-speech') pasDeReponse();
     };
     rec.onend = function () {
-      if (!ecoute) return;
+      clearTimeout(silence);
+      if (!ecoute) return; // arrêt déjà traité
       ecoute = false;
       majMicro();
+      if (mode === 'reponse') surReponse(entendu); else finDeDictee();
     };
     try {
       rec.start();
@@ -246,29 +344,182 @@
     }
   }
 
-  btnMicro.addEventListener('click', demarrer);
+  btnMicro.addEventListener('click', function () {
+    if (ecoute) { arreter(); if (mode === 'dictee') finDeDictee(); return; }
+    question = null;
+    ecouter('dictee');
+  });
 
-  /* ---------- Ouverture / validation ---------- */
+  /* ---------- Le pilote auto : décider seul, ne demander qu'en cas de vrai doute ---------- */
+
+  function annulerCompte() {
+    if (compte) { clearInterval(compte); compte = null; majBoutonValider(); }
+  }
+
+  function finDeDictee() {
+    if (action === 'annuler') {
+      dlg.close();
+      toast('🗑️ Dictée annulée');
+      if (parole) dire('Dictée annulée.');
+      return;
+    }
+    if (!auto || !pilote) return; // mode relecture : on attend le bouton
+    const liste = aValider();
+    if (!liste.length) {
+      if (zoneTexte.value.trim()) {
+        majMicro("🤔 Je n'ai pas compris de tâche — appuyez pour répéter");
+        if (parole) dire("Je n'ai pas compris. Pouvez-vous répéter ?");
+      }
+      return;
+    }
+    // Un vrai doute ? → une seule question, précise
+    for (let i = 0; i < brouillons.length; i++) {
+      if (doute(effective(i))) { poserQuestion(i); return; }
+    }
+    // Tout est clair → on enregistre (tout de suite si « enregistre » a été dit)
+    lancerCompte(action === 'enregistrer' ? 0 : ATTENTE_AUTO_S);
+  }
+
+  function nomCourt(nom, famille) {
+    let n = nom.replace(/\s*\(.*\)/, '');
+    if (famille) n = n.replace(new RegExp('^' + famille + '\\s*-?\\s*', 'i'), '');
+    return n;
+  }
+
+  // Pas de réponse (en voiture…) : on ne perd pas la tâche, elle part sans chantier précis
+  function pasDeReponse() {
+    if (!question || !auto || !pilote) return;
+    const i = question.i;
+    majMicro('⏭️ Pas de réponse : j\'enregistre sans chantier précis');
+    if (parole) dire('Pas de réponse, je la note sans chantier précis.', function () {
+      if (question && question.i === i) choisirChantier(i, '');
+    });
+    else choisirChantier(i, '');
+  }
+
+  function poserQuestion(i, relance) {
+    question = { i: i, essais: relance ? 1 : 0 };
+    afficherApercu();
+    const t = effective(i);
+    const carte = apercu.querySelector('.v-carte[data-i="' + i + '"]');
+    if (carte) carte.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    // Mot commun (ex. « NEOLIA ») retiré pour une question courte
+    const premiers = t.candidats.map(function (n) { return n.split(/[\s-]+/)[0]; });
+    const famille = premiers.every(function (p) { return p.toLowerCase() === premiers[0].toLowerCase(); }) ? premiers[0] : '';
+    const q = 'Pour « ' + t.titre + ' », quel chantier ' + (famille ? famille.charAt(0) + famille.slice(1).toLowerCase() + ' ' : '') + '?';
+    majMicro('❓ ' + q);
+    const phrases = relance ? ["Je n'ai pas compris. Quel chantier ?"] : [q];
+    if (relance) {
+      // question courte
+    } else if (t.candidats.length <= 4) {
+      phrases.push(t.candidats.map(function (n) { return nomCourt(n, famille); }).join(', ou ') + ' ?');
+    } else {
+      phrases.push('Dites le nom, ou touchez-le à l\'écran.');
+    }
+    if (parole) dire(phrases, function () { if (dlg.open && question) ecouter('reponse'); });
+    else if (SR) ecouter('reponse');
+  }
+
+  function surReponse(texte) {
+    if (!question) return;
+    const i = question.i;
+    const t = effective(i);
+    const cmd = AnalyseDictee.commandeFinale(texte);
+    if (cmd.action === 'annuler') { action = 'annuler'; question = null; finDeDictee(); return; }
+    const choix = AnalyseDictee.choisirParmi(cmd.texte, t.candidats, lexiqueActuel());
+    if (choix === null) {
+      if (!question.essais && cmd.texte) { poserQuestion(i, true); return; } // on redemande une fois
+      pasDeReponse();
+      return;
+    }
+    choisirChantier(i, choix);
+  }
+
+  function choisirChantier(i, site) {
+    modifs[i] = Object.assign(modifs[i] || {}, { site: site, siteChoisi: true });
+    question = null;
+    afficherApercu();
+    if (auto && pilote) finDeDictee(); // question suivante, ou enregistrement
+  }
+
+  function lancerCompte(secondes) {
+    annulerCompte();
+    if (secondes <= 0) { enregistrer(); return; }
+    let reste = secondes;
+    majMicro('✅ Compris — j\'enregistre… (touchez une fiche pour corriger)');
+    majBoutonValider(reste);
+    compte = setInterval(function () {
+      reste -= 1;
+      if (reste <= 0) { annulerCompte(); enregistrer(); }
+      else majBoutonValider(reste);
+    }, 1000);
+  }
+
+  /* ---------- Enregistrement ---------- */
+
+  function enregistrer() {
+    arreter();
+    annulerCompte();
+    const liste = aValider().map(function (t) {
+      return {
+        titre: t.titre.trim(), date: t.date, heure: t.heure, duree: t.duree,
+        priorite: t.priorite, categorie: t.categorie, site: (t.site || '').trim(),
+        notes: t.notes || '',
+        siteDeduit: (t.siteChoisi && t.site) ? 'choisi' : (t.siteDeduit || '') // pour le redire à l'oral
+      };
+    });
+    if (!liste.length) return;
+    const ids = ajouterTaches(liste);
+    dlg.close();
+    toast('✅ ' + pluriel(liste.length, 'tâche') + ' enregistrée' + (liste.length > 1 ? 's' : ''), 'Annuler', function () {
+      retirerTaches(ids);
+      toast('↩️ Annulé');
+      if (parole) dire('Annulé.');
+    });
+    if (parole) {
+      const auj = aujourdhui();
+      dire([liste.length === 1 ? "C'est noté." : "C'est noté, " + liste.length + ' tâches.']
+        .concat(liste.map(function (t) { return AnalyseDictee.resumer(t, auj) + '.'; })));
+    }
+  }
+
+  btnValider.addEventListener('click', enregistrer);
+
+  /* ---------- Ouverture ---------- */
+
+  function majBoutonsEntete() {
+    btnParole.textContent = parole ? '🔊' : '🔇';
+    btnMode.textContent = auto ? '⚡ Auto' : '✋ Relecture';
+    btnMode.classList.toggle('actif', auto);
+    btnMode.title = auto ? 'Pilote auto : j\'enregistre seule, je ne demande qu\'en cas de doute'
+                         : 'Relecture : vous validez chaque dictée';
+  }
 
   function ouvrir(lancerMicro) {
     zoneTexte.value = '';
     brouillons = [];
     modifs = {};
+    action = '';
+    question = null;
+    pilote = true;
     afficherApercu();
-    btnParole.textContent = parole ? '🔊' : '🔇';
+    majBoutonsEntete();
     if (!SR) {
       btnMicro.hidden = true;
+      pilote = false; // dictée au clavier : on ne sait pas quand elle finit → validation au bouton
       aide.innerHTML = 'Sur ce téléphone, appuyez sur le <strong>micro 🎙️ du clavier</strong> ' +
         'et dictez dans la zone ci-dessous. Je synthétise au fur et à mesure. ' +
         'Dites <strong>puis</strong> entre deux tâches.';
     }
     dlg.showModal();
-    if (SR && lancerMicro) demarrer(); else if (!SR) zoneTexte.focus();
+    if (SR && lancerMicro) ecouter('dictee'); else if (!SR) zoneTexte.focus();
     majMicro();
   }
 
   dlg.addEventListener('close', function () {
+    question = null;
     arreter();
+    annulerCompte();
     clearTimeout(minuterie);
   });
 
@@ -277,29 +528,18 @@
 
   btnParole.addEventListener('click', function () {
     parole = !parole;
-    try { localStorage.setItem(CLE_PAROLE, parole ? 'oui' : 'non'); } catch (e) {}
-    btnParole.textContent = parole ? '🔊' : '🔇';
-    toast(parole ? '🔊 Confirmation à voix haute activée' : '🔇 Confirmation à voix haute coupée');
+    ecrire(CLE_PAROLE, parole ? 'oui' : 'non');
+    majBoutonsEntete();
+    toast(parole ? '🔊 Je vous réponds à voix haute' : '🔇 Réponses à voix haute coupées');
   });
 
-  btnValider.addEventListener('click', function () {
-    arreter();
-    const liste = aValider().map(function (t) {
-      return {
-        titre: t.titre.trim(), date: t.date, heure: t.heure, duree: t.duree,
-        priorite: t.priorite, categorie: t.categorie, site: (t.site || '').trim(),
-        notes: t.notes || ''
-      };
-    });
-    if (!liste.length) return;
-    ajouterTaches(liste);
-    dlg.close();
-    toast('✅ ' + pluriel(liste.length, 'tâche') + ' ajoutée' + (liste.length > 1 ? 's' : ''));
-    if (parole) {
-      const auj = aujourdhui();
-      dire([liste.length === 1 ? "C'est noté." : "C'est noté, " + liste.length + ' tâches.']
-        .concat(liste.map(function (t) { return AnalyseDictee.resumer(t, auj) + '.'; })));
-    }
+  btnMode.addEventListener('click', function () {
+    auto = !auto;
+    ecrire(CLE_AUTO, auto ? 'oui' : 'non');
+    majBoutonsEntete();
+    if (!auto) reprendreLaMain();
+    toast(auto ? '⚡ Pilote auto : j\'enregistre seule, je ne demande qu\'en cas de doute'
+               : '✋ Relecture : vous validez chaque dictée');
   });
 
   /* ---------- 🔊 Ma journée ---------- */

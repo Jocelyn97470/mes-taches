@@ -236,7 +236,39 @@
     return (' ' + texteNorm + ' ').indexOf(' ' + cle + ' ') >= 0;
   }
 
-  function trouverChantier(texte, lexique) {
+  // Plusieurs chantiers possibles : on tranche seul avec les indices de la phrase
+  // (agente citée = titulaire, ville ou secteur cité) puis l'historique des tâches.
+  function villeDe(c) {
+    const m = /\d{5}\s+([^,]+)$/.exec(c.adresse || '');
+    return m ? normaliser(m[1]) : '';
+  }
+
+  function departager(candidats, n, lexique, historique) {
+    const noms = new Set();
+    (lexique.agents || []).forEach(function (a) {
+      if ((a.cles || []).some(function (k) { return contient(n, k); })) noms.add(a.nom);
+    });
+    const scores = candidats.map(function (c) {
+      let sc = 0;
+      if ((c.titulaires || []).some(function (t) { return noms.has(t.nom); })) sc += 4;
+      const ville = villeDe(c), secteur = normaliser(c.secteur || '');
+      if ((ville && contient(n, ville)) || (secteur && contient(n, secteur))) sc += 2;
+      return sc;
+    });
+    let max = Math.max.apply(null, scores);
+    let gagnants = candidats.filter(function (_, i) { return scores[i] === max; });
+    if (max > 0 && gagnants.length === 1) return { chantier: gagnants[0], raison: 'indices' };
+    // Égalité : le chantier utilisé le plus récemment dans les tâches
+    const pool = max > 0 ? gagnants : candidats;
+    const hist = (historique || []).map(normaliser);
+    for (let i = 0; i < hist.length; i++) {
+      const c = pool.find(function (x) { return normaliser(x.nom) === hist[i]; });
+      if (c) return { chantier: c, raison: 'historique' };
+    }
+    return null;
+  }
+
+  function trouverChantier(texte, lexique, historique) {
     const vide = { site: '', adresse: '', candidats: [] };
     if (!lexique || !Array.isArray(lexique.chantiers)) return vide;
     const n = normaliser(texte);
@@ -252,16 +284,22 @@
         (meilleurs.length > 1 && meilleurs.every(function (c) { return c.adresse && c.adresse === meilleurs[0].adresse; }))) {
       return { site: meilleurs[0].nom, adresse: meilleurs[0].adresse || '', candidats: [] };
     }
-    if (meilleurs.length > 1) {
-      return { site: '', adresse: '', candidats: meilleurs.map(function (c) { return c.nom; }) };
+    let candidats = meilleurs;
+    if (!candidats.length) {
+      // Mot de « famille » (ex. « Néolia » seul)
+      let fam = null;
+      (lexique.familles || []).forEach(function (f) {
+        if (contient(n, f.cle) && (!fam || f.cle.length > fam.cle.length)) fam = f;
+      });
+      if (!fam) return vide;
+      candidats = lexique.chantiers.filter(function (c) { return fam.chantiers.indexOf(c.nom) >= 0; });
     }
-    // Mot de « famille » (ex. « Néolia » seul) → proposer le choix
-    let fam = null;
-    (lexique.familles || []).forEach(function (f) {
-      if (contient(n, f.cle) && (!fam || f.cle.length > fam.cle.length)) fam = f;
-    });
-    if (fam) return { site: '', adresse: '', candidats: fam.chantiers.slice() };
-    return vide;
+    const choix = departager(candidats, n, lexique, historique);
+    if (choix) {
+      return { site: choix.chantier.nom, adresse: choix.chantier.adresse || '', candidats: [],
+               deduit: choix.raison };
+    }
+    return { site: '', adresse: '', candidats: candidats.map(function (c) { return c.nom; }) };
   }
 
   function trouverAgents(texte, lexique) {
@@ -294,11 +332,29 @@
     return parseInt(suf, 10) || 0;
   }
 
-  function analyserSegment(texte, ref, lexique) {
+  function analyserSegment(texte, ref, lexique, historique, maintenantRef) {
     const s = new Segment(texte);
     const r = { titre: '', date: '', heure: '', duree: '', priorite: 'normale', categorie: 'chantier',
                 site: '', adresse: '', candidats: [], agents: [], notes: '', dictee: texte.trim(),
-                dateDite: false, sansDate: false, moment: '' };
+                dateDite: false, sansDate: false, moment: '', logique: [] };
+
+    /* « dans 2 heures », « dans une demi-heure », « dans 20 minutes » → aujourd'hui, heure calculée */
+    function dansMinutes(n) {
+      const d = new Date(maintenantRef.getTime() + n * 60000);
+      r.date = iso(d); r.dateDite = true;
+      r.heure = hhmm(d.getHours(), Math.round(d.getMinutes() / 5) * 5 % 60);
+    }
+    s.chercher('\\bdans (?:une )?demi[- ]heure\\b', function () { dansMinutes(30); });
+    s.chercher('\\bdans ' + NUM + ' ?(?:h|heures?)(?: (et demie?|et quart))?(?![0-9:])\\b', function (m) {
+      const n = nombre(m[1]);
+      if (n == null || n > 12) return false;
+      dansMinutes(n * 60 + minutesSuffixe(m[2]));
+    });
+    s.chercher('\\bdans ' + NUM + ' ?(?:minutes?|mn|min)\\b', function (m) {
+      const n = nombre(m[1]);
+      if (n == null) return false;
+      dansMinutes(n);
+    });
 
     /* Durée (avant l'heure, pour ne pas confondre « pendant 2 heures » et « à 2 heures ») */
     s.chercher('\\b(?:pendant|duree(?: de)?|ca (?:va )?prendre|ca prend|prevoir|compter)(?: environ| a peu pres)? ' + NUM +
@@ -382,6 +438,10 @@
     function poserHeure(h, mn, qualif) {
       if (h == null) return false;
       if (qualif && /soir|apres|aprem/.test(qualif) && h < 12) h += 12;
+      // Logique métier : personne ne commence entre 1 h et 4 h du matin → c'est l'après-midi
+      else if (!qualif && h >= 1 && h <= 4) { h += 12; r.logique.push('heure-apres-midi'); }
+      // « ce soir à 8 h », « vendredi soir à 7 h » → 20 h, 19 h
+      else if (!qualif && h < 12 && r.moment && /soir|apres/.test(r.moment)) h += 12;
       if (mn < 0) { h -= 1; mn += 60; }
       const v = hhmm(h, mn);
       if (!v) return false;
@@ -405,15 +465,16 @@
     }
 
     /* Chantier, agentes, catégorie : sur la phrase entière */
-    const ch = trouverChantier(texte, lexique);
+    const ch = trouverChantier(texte, lexique, historique);
     r.site = ch.site; r.adresse = ch.adresse; r.candidats = ch.candidats;
+    if (ch.deduit) r.siteDeduit = ch.deduit;
     r.agents = trouverAgents(texte, lexique);
     r.categorie = categorie(s.bas, r.agents);
     s.chercher('\\bcategorie (?:chantier|equipe|qualite|materiel|client|administratif|admin)\\b', function () {});
 
     /* Titre */
     let titre = nettoyerTitre(s.reste());
-    if (r.moment) {
+    if (r.moment && !r.heure) {
       const mo = r.moment.replace('apres midi', 'après-midi').replace('apres-midi', 'après-midi')
         .replace('matinee', 'matinée').replace('soiree', 'soirée').replace('fin de journee', 'fin de journée');
       titre = titre ? titre + ' (' + mo.replace(/^(en |dans la |le )/, '') + ')' : '';
@@ -449,16 +510,23 @@
   function analyser(texte, options) {
     options = options || {};
     const ref = options.aujourdhui ? new Date(options.aujourdhui + 'T12:00:00') : new Date();
+    const maintenant = options.maintenant ? new Date(options.maintenant) : ref;
     const lexique = options.lexique || null;
     const propre = String(texte || '').normalize('NFC').replace(/\s+/g, ' ').trim();
     if (!propre) return [];
     const taches = [];
     let datePrecedente = '';
     decouper(propre).forEach(function (seg) {
-      const t = analyserSegment(seg, ref, lexique);
+      const t = analyserSegment(seg, ref, lexique, options.historique, maintenant);
       if (!t.titre || t.titre.length < 2) return;
       if (!t.date && !t.sansDate) {
         t.date = (datePrecedente && !t.dateDite) ? datePrecedente : iso(ref);
+        // Heure déjà passée aujourd'hui et aucun jour dit → c'est pour demain
+        if (t.heure && t.date === iso(maintenant) &&
+            t.heure < hhmm(maintenant.getHours(), maintenant.getMinutes())) {
+          t.date = iso(plus(maintenant, 1));
+          t.logique.push('demain-heure-passee');
+        }
       }
       if (t.dateDite) datePrecedente = t.date;
       taches.push(t);
@@ -492,6 +560,7 @@
 
   function resumer(t, aujIso) {
     const morceaux = [t.titre];
+    if (t.site && t.siteDeduit) morceaux.push('chantier ' + t.site.replace(/\s*\(.*\)/, ''));
     let quand = dateParlee(t.date, aujIso);
     if (t.heure) quand += ' à ' + heureParlee(t.heure);
     morceaux.push(quand);
@@ -500,8 +569,60 @@
     return morceaux.join(', ');
   }
 
+  /* ---------- Réponse à « Quel chantier ? » ---------- */
+
+  const ORDINAUX = { 'premier': 0, 'premiere': 0, '1': 0, '1er': 0, 'un': 0,
+    'deuxieme': 1, 'second': 1, 'seconde': 1, '2': 1, 'deux': 1, '2e': 1,
+    'troisieme': 2, '3': 2, 'trois': 2, '3e': 2, 'quatrieme': 3, '4': 3, 'quatre': 3,
+    'cinquieme': 4, '5': 4, 'cinq': 4, 'dernier': -1, 'derniere': -1 };
+
+  // → nom du chantier choisi, '' pour « aucun », null si pas compris
+  function choisirParmi(reponse, candidats, lexique) {
+    const n = normaliser(reponse);
+    if (!n) return null;
+    const mots = n.split(' ');
+    const fiches = candidats.map(function (nom) {
+      return (lexique && lexique.chantiers || []).find(function (c) { return c.nom === nom; }) || { nom: nom };
+    });
+    let meilleur = null, max = 0, egalite = false;
+    fiches.forEach(function (c) {
+      const ref = ' ' + normaliser([c.nom, villeDe(c), c.secteur || '', (c.cles || []).join(' ')].join(' ')) + ' ';
+      const sc = mots.filter(function (m) { return m.length > 1 && ref.indexOf(' ' + m + ' ') >= 0; }).length;
+      if (sc > max) { max = sc; meilleur = c; egalite = false; } else if (sc === max && sc > 0) egalite = true;
+    });
+    if (meilleur && !egalite) return meilleur.nom;
+    for (let i = 0; i < mots.length; i++) {
+      if (Object.prototype.hasOwnProperty.call(ORDINAUX, mots[i])) {
+        const k = ORDINAUX[mots[i]];
+        const idx = k < 0 ? candidats.length - 1 : k;
+        if (idx < candidats.length) return candidats[idx];
+      }
+    }
+    if (/\b(aucun|aucune|rien|peu importe|sans chantier|laisse|non|sais pas|pas chantier|autre)\b/.test(n)) return '';
+    return null;
+  }
+
+  /* ---------- Commandes vocales en fin de dictée ---------- */
+
+  const CMD_ENREGISTRER = /[\s,.;!]*\b(?:c'est tout|c'est bon|ca sera tout|enregistre[sz]?|enregistrer|valide[sz]?|valider|termine|c'est termine|fin de (?:la )?dictee|ok merci|go)\b[\s,.!]*(?:merci)?[\s.!]*$/;
+  const CMD_ANNULER = /[\s,.;!]*\b(?:annule[sz]?(?: tout)?|annuler|laisse tomber|efface tout|oublie (?:ca|tout))\b[\s,.!]*$/;
+
+  // « … puis vendredi contrôle Néolia, enregistre » → { texte: « … Néolia », action: 'enregistrer' }
+  function commandeFinale(texte) {
+    const t = String(texte || '').normalize('NFC');
+    const bas = plier(t);
+    let m = CMD_ANNULER.exec(bas);
+    if (m) return { texte: t.slice(0, m.index).trim(), action: 'annuler' };
+    m = CMD_ENREGISTRER.exec(bas);
+    if (m) return { texte: t.slice(0, m.index).trim(), action: 'enregistrer' };
+    return { texte: t.trim(), action: '' };
+  }
+
   const API = {
     analyser: analyser,
+    commandeFinale: commandeFinale,
+    choisirParmi: choisirParmi,
+    villeDe: villeDe,
     resumer: resumer,
     dateParlee: dateParlee,
     heureParlee: heureParlee,
