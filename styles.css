@@ -241,3 +241,151 @@ dialog input:focus, dialog select:focus, dialog textarea:focus {
 }
 .btn.primaire { background: var(--accent); border-color: var(--accent); color: #04211d; }
 .btn.secondaire { background: var(--carte-2); color: var(--texte); }
+
+/* ===== Dictée vocale ===== */
+.fab { font-size: 1.7rem; }
+.fab-petit {
+  right: 94px;
+  bottom: 30px;
+  width: 50px;
+  height: 50px;
+  font-size: 1.6rem;
+  background: var(--carte-2);
+  color: var(--texte);
+  border: 1px solid var(--bordure);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.stat-ecouter {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-color: var(--accent-fonce);
+}
+.stat-ecouter span { font-size: 1.3rem; line-height: 1.6rem; }
+.stat-ecouter:active { transform: scale(0.97); }
+
+.info-site { margin: 6px 0 0; font-size: 0.78rem; color: var(--texte-2); line-height: 1.5; }
+.btn-itin { border-color: var(--vert) !important; }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 100px;
+  transform: translate(-50%, 20px);
+  max-width: min(92vw, 520px);
+  background: var(--carte-2);
+  border: 1px solid var(--accent);
+  color: var(--texte);
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 50;
+}
+.toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+#dlg-voix { max-height: 92vh; overflow-y: auto; }
+.voix-entete { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.voix-entete h2 { margin: 0; }
+
+.v-micro {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 14px 0 4px;
+  padding: 14px 16px;
+  border-radius: var(--rayon);
+  border: 1px solid var(--accent);
+  background: var(--fond);
+  color: var(--texte);
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.v-onde {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--texte-2);
+}
+.v-micro.actif { border-color: var(--rouge); }
+.v-micro.actif .v-onde { background: var(--rouge); animation: pulse 1.1s ease-out infinite; }
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  100% { box-shadow: 0 0 0 14px rgba(239, 68, 68, 0); }
+}
+
+#v-texte {
+  width: 100%;
+  margin-top: 8px;
+  background: var(--fond);
+  border: 1px solid var(--bordure);
+  border-radius: 10px;
+  color: var(--texte);
+  padding: 10px 12px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.v-apercu { margin-top: 10px; }
+.v-compris { margin: 6px 0 8px; font-size: 0.9rem; color: var(--accent); font-weight: 600; }
+.v-carte {
+  background: var(--carte-2);
+  border: 1px solid var(--bordure);
+  border-left: 5px solid var(--orange);
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.v-carte.prio-haute { border-left-color: var(--rouge); }
+.v-carte.prio-basse { border-left-color: var(--vert); }
+.v-ligne { display: flex; gap: 8px; }
+.v-carte input, .v-carte select {
+  min-width: 0;
+  background: var(--fond);
+  border: 1px solid var(--bordure);
+  border-radius: 8px;
+  color: var(--texte);
+  padding: 8px 9px;
+  font-size: 0.92rem;
+  font-family: inherit;
+  width: 100%;
+}
+.v-carte .v-titre { flex: 1; font-weight: 600; font-size: 1rem; }
+.v-retirer {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--bordure);
+  border-radius: 8px;
+  color: var(--texte-2);
+  padding: 0 11px;
+  cursor: pointer;
+}
+.v-champs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0; }
+.v-choix { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: 0.8rem; color: var(--orange); }
+.v-puce {
+  background: var(--fond);
+  border: 1px dashed var(--orange);
+  color: var(--texte);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.v-info { margin: 6px 0 0; font-size: 0.78rem; color: var(--texte-2); line-height: 1.5; }
+#dlg-voix .dlg-boutons {
+  position: sticky;
+  bottom: -20px;
+  margin: 12px -20px -20px;
+  padding: 12px 20px 16px;
+  background: var(--carte);
+  border-top: 1px solid var(--bordure);
+}
+#dlg-voix #v-valider { flex: 2; }

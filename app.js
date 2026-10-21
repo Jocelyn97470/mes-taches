@@ -7,6 +7,7 @@
 
 const CLE_STOCKAGE = 'taches-chantier-v1';
 const CLE_SYNC = 'taches-chantier-sync';
+const CLE_LEXIQUE = 'taches-chantier-lexique';
 const DEPOT_DEFAUT = 'Jocelyn97470/mes-taches-data';
 
 const CATEGORIES = {
@@ -22,6 +23,23 @@ let taches = [];
 let supprimees = {}; // { id: date ISO de suppression } — pour la synchro
 let filtreActuel = 'auj';
 let idEnCours = null; // null = nouvelle tâche, sinon id de la tâche modifiée
+
+// Lexique des chantiers (adresses, titulaires) : fichier lexique.json du dépôt privé,
+// récupéré à chaque synchro et gardé sur l'appareil.
+let lexique = null;
+try { lexique = JSON.parse(localStorage.getItem(CLE_LEXIQUE) || 'null'); } catch (e) {}
+
+function chantierDuLexique(nom) {
+  return (window.AnalyseDictee && lexique) ? AnalyseDictee.chantierParNom(nom, lexique) : null;
+}
+
+function remplirListeChantiers() {
+  const liste = document.getElementById('liste-chantiers');
+  if (!liste || !lexique || !Array.isArray(lexique.chantiers)) return;
+  liste.innerHTML = lexique.chantiers.map(function (c) {
+    return '<option value="' + echapper(c.nom) + '">' + echapper(c.adresse || c.secteur || '') + '</option>';
+  }).join('');
+}
 
 /* ---------- Stockage local ---------- */
 
@@ -108,7 +126,7 @@ function lienGoogleAgenda(t) {
   details.push('\n(Créé avec Mes Tâches Chantier)');
   p.set('details', details.join('\n'));
 
-  if (t.site) p.set('location', t.site);
+  if (t.adresse || t.site) p.set('location', [t.site, t.adresse].filter(Boolean).join(', '));
 
   return 'https://calendar.google.com/calendar/render?' + p.toString();
 }
@@ -143,11 +161,26 @@ function carteHTML(t) {
 
   let badges = '<span class="badge">' + (CATEGORIES[t.categorie] || echapper(t.categorie)) + '</span>';
   if (t.site) badges += '<span class="badge">📍 ' + echapper(t.site) + '</span>';
+  if (t.duree) badges += '<span class="badge">⏱ ' + echapper(t.duree) + ' min</span>';
   if (t.date) {
     badges += '<span class="badge' + (enRetard ? ' badge-retard' : '') + '">🗓 ' +
       dateFr(t.date) + (t.heure ? ' · ' + t.heure : '') +
       (enRetard ? ' — en retard !' : '') + '</span>';
   }
+
+  // Qui est sur ce chantier et quand (depuis le référentiel)
+  let infoSite = '';
+  const ch = (!t.archive && t.site) ? chantierDuLexique(t.site) : null;
+  if (ch && ch.titulaires && ch.titulaires.length) {
+    infoSite = '<p class="info-site">👤 ' + ch.titulaires.map(function (a) {
+      return echapper(a.nom) + (a.horaires ? ' · ' + echapper(a.horaires) : '');
+    }).join('<br>👤 ') + '</p>';
+  }
+  const adresse = t.adresse || (ch ? ch.adresse : '');
+  const lienItineraire = adresse
+    ? '<a class="btn-itin" href="https://www.google.com/maps/dir/?api=1&destination=' +
+      encodeURIComponent(adresse) + '" target="_blank" rel="noopener" title="Itinéraire vers ' + echapper(adresse) + '">🧭</a>'
+    : '';
 
   let actions;
   if (t.archive) {
@@ -156,6 +189,7 @@ function carteHTML(t) {
       '<button class="btn-suppr" title="Supprimer définitivement">🗑️</button>';
   } else {
     actions =
+      lienItineraire +
       '<a class="btn-gcal" href="' + lienGoogleAgenda(t) + '" target="_blank" rel="noopener" title="Ajouter à Google Agenda">📅</a>' +
       '<button class="btn-note" title="Ajouter / modifier la note">📝</button>' +
       '<button class="btn-modif" title="Modifier">✏️</button>' +
@@ -169,6 +203,7 @@ function carteHTML(t) {
     '<div class="corps">' +
       '<h3>' + echapper(t.titre) + '</h3>' +
       '<div class="badges">' + badges + '</div>' +
+      infoSite +
       (t.notes ? '<p class="notes">📝 ' + echapper(t.notes) + '</p>' : '') +
     '</div>' +
     '<div class="actions">' + actions + '</div>' +
@@ -195,7 +230,7 @@ function afficher() {
   if (visibles.length === 0) {
     const message = filtreActuel === 'archives' ? 'Aucune tâche archivée.' :
                     filtreActuel === 'faites' ? 'Aucune tâche terminée à archiver.' :
-                    'Rien ici pour le moment.<br>Appuyez sur <strong>＋</strong> pour ajouter une tâche.';
+                    'Rien ici pour le moment.<br>Appuyez sur <strong>🎤</strong> pour dicter une tâche<br>ou sur <strong>＋</strong> pour l\'écrire.';
     conteneur.innerHTML = '<div class="vide"><span class="gros">' +
       (filtreActuel === 'archives' ? '📦' : '🌤️') + '</span>' + message + '</div>';
   } else {
@@ -333,6 +368,7 @@ function synchroniser(manuel) {
       const h = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
       majEtatSync('✓ Synchronisé à ' + h, 'sync-ok');
       syncEnCours = false;
+      majLexique(entetes);
       return true;
     })
     .catch(function (err) {
@@ -340,6 +376,23 @@ function synchroniser(manuel) {
       syncEnCours = false;
       return false;
     });
+}
+
+// Récupère lexique.json (dépôt privé) seulement s'il a changé
+function majLexique(entetes) {
+  const api = 'https://api.github.com/repos/' + configSync.depot + '/contents/lexique.json';
+  fetch(api + '?cacheBust=' + Date.now(), { headers: entetes, cache: 'no-store' })
+    .then(function (rep) { return rep.ok ? rep.json() : null; })
+    .then(function (json) {
+      if (!json || (lexique && lexique._sha === json.sha)) return;
+      const nouveau = JSON.parse(depuisBase64(json.content));
+      nouveau._sha = json.sha;
+      lexique = nouveau;
+      localStorage.setItem(CLE_LEXIQUE, JSON.stringify(lexique));
+      remplirListeChantiers();
+      afficher();
+    })
+    .catch(function () { /* pas de lexique : l'appli marche sans */ });
 }
 
 function planifierSync() {
@@ -432,11 +485,16 @@ form.addEventListener('submit', function (e) {
     return;
   }
 
+  const site = document.getElementById('f-site').value.trim();
+  const ancienne = idEnCours ? taches.find(function (x) { return x.id === idEnCours; }) : null;
+  const chantier = chantierDuLexique(site);
   const donnees = {
     titre: titre,
     categorie: document.getElementById('f-categorie').value,
     priorite: document.getElementById('f-priorite').value,
-    site: document.getElementById('f-site').value.trim(),
+    site: chantier ? chantier.nom : site,
+    adresse: chantier ? (chantier.adresse || '') :
+             (ancienne && ancienne.site === site ? (ancienne.adresse || '') : ''),
     date: document.getElementById('f-date').value,
     heure: document.getElementById('f-heure').value,
     duree: document.getElementById('f-duree').value,
@@ -466,6 +524,33 @@ document.getElementById('btn-annuler').addEventListener('click', function () {
 document.getElementById('btn-ajouter').addEventListener('click', function () {
   ouvrirFormulaire(null);
 });
+
+/* ---------- Ajout de tâches venant de la dictée ---------- */
+
+function ajouterTaches(liste) {
+  const quand = maintenant();
+  liste.forEach(function (d) {
+    const chantier = chantierDuLexique(d.site);
+    taches.push({
+      titre: d.titre,
+      categorie: d.categorie || 'chantier',
+      priorite: d.priorite || 'normale',
+      site: chantier ? chantier.nom : (d.site || ''),
+      adresse: chantier ? (chantier.adresse || '') : (d.adresse || ''),
+      date: d.date || '',
+      heure: d.heure || '',
+      duree: d.duree || '',
+      notes: d.notes || '',
+      modif: quand,
+      id: nouvelId(),
+      fait: false,
+      cree: quand,
+      source: 'dictee'
+    });
+  });
+  sauver();
+  afficher();
+}
 
 /* ---------- Actions sur les cartes (délégation) ---------- */
 
@@ -612,6 +697,7 @@ document.getElementById('date-jour').textContent =
   });
 
 charger();
+remplirListeChantiers();
 afficher();
 synchroniser(false);
 

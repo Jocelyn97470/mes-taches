@@ -1,12 +1,21 @@
 {
   "name": "Mes Tâches Chantier",
   "short_name": "Tâches",
-  "description": "Gestion des tâches d'un responsable de chantier propreté, avec envoi vers Google Agenda.",
+  "description": "Gestion des tâches d'un responsable de chantier propreté, avec dictée vocale et envoi vers Google Agenda.",
   "lang": "fr",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#0b1220",
   "theme_color": "#0f766e",
+  "shortcuts": [
+    {
+      "name": "Dicter une tâche",
+      "short_name": "Dicter",
+      "description": "Ouvre directement la dictée vocale",
+      "url": "./?dicter=1",
+      "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ],
   "icons": [
     {
       "src": "icon.svg",

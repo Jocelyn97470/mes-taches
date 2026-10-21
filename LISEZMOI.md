@@ -4,6 +4,40 @@ Application personnelle de gestion de tâches pour responsable de chantier /
 chef d'équipe propreté. Fonctionne sur ordinateur ET téléphone, et permet
 d'envoyer chaque tâche vers Google Agenda en un clic (bouton 📅).
 
+## 🎤 Dicter ses tâches (nouveau)
+
+- Appuyer sur le gros bouton **🎤** et parler normalement, par exemple :
+  « demain à 9 h appeler Cotta, c'est urgent, **puis** vendredi contrôle qualité
+  Néolia Belfort ». Dire **puis** ou **ensuite** entre deux tâches.
+- Pendant qu'on parle, l'appli **synthétise en direct** chaque tâche : titre
+  propre (« il faut que j'appelle… » → « Appeler… »), date, heure, durée,
+  priorité (« urgent », « pas pressé »), catégorie et **chantier reconnu**
+  (avec son adresse et la titulaire).
+- Si un mot désigne plusieurs chantiers (« Néolia », « Cotta »), l'appli
+  propose de choisir. Tout reste modifiable avant **Ajouter**.
+- L'appli confirme à voix haute ce qu'elle a noté (bouton 🔊 / 🔇 pour couper).
+- Mots compris : aujourd'hui, ce soir, demain, après-demain, lundi… dimanche,
+  « mardi de la semaine prochaine », le 16 novembre, le 28/10, dans 3 jours,
+  dans quinze jours, la semaine prochaine, fin de semaine, fin du mois ;
+  à 9 h, 14 h 30, midi et demi, 8 h du soir ; pendant 30 minutes, pendant 1 h 30.
+- **Raccourci** : appui long sur l'icône de l'appli → « Dicter une tâche ».
+- Sans micro dans le navigateur (iPhone, Firefox…) : utiliser le micro 🎙️ du
+  clavier, l'appli synthétise pareil.
+
+**🔊 Ma journée** : lit à voix haute les tâches du jour, les retards et le
+programme de demain (pratique en voiture). Toucher à nouveau pour arrêter.
+
+**🧭 Itinéraire** : sur une tâche liée à un chantier connu, ouvre Google Maps
+vers l'adresse. Sous la tâche s'affichent la titulaire et ses horaires.
+
+La liste des chantiers (adresses, titulaires) vient du fichier `lexique.json`
+du dépôt **privé** `mes-taches-data` ; elle arrive avec la synchro (rien de
+privé n'est dans ce dépôt public).
+
+**Avec Claude** : on peut aussi dicter à Claude (« ajoute une tâche : … ») ; il
+écrit directement dans `mes-taches-data` et la tâche apparaît dans l'appli à la
+synchro suivante.
+
 ## 1. Tester sur l'ordinateur (tout de suite)
 
 Deux façons :
@@ -103,7 +137,9 @@ dépôt à la synchro suivante).
 |---|---|
 | `index.html` | la page de l'application |
 | `styles.css` | l'apparence |
-| `app.js` | le fonctionnement (tâches, filtres, Google Agenda) |
+| `app.js` | le fonctionnement (tâches, filtres, Google Agenda, synchro) |
+| `analyse.js` | compréhension d'une dictée en français (dates, heures, chantiers…) |
+| `dictee.js` | micro 🎤, relecture, confirmation vocale, 🔊 Ma journée |
 | `manifest.webmanifest` + `icon.svg` | installation sur téléphone (PWA) |
 | `sw.js` | mode hors-ligne |
 | `serve.ps1` | mini-serveur de test local (PC uniquement) |

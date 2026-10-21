@@ -3,12 +3,14 @@
 
 'use strict';
 
-const CACHE = 'taches-chantier-v3';
+const CACHE = 'taches-chantier-v4';
 const FICHIERS = [
   './',
   './index.html',
   './styles.css',
+  './analyse.js',
   './app.js',
+  './dictee.js',
   './manifest.webmanifest',
   './icon.svg'
 ];

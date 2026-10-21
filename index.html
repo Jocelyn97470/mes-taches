@@ -39,6 +39,10 @@
     <span id="stat-fait">0</span>
     <label>Terminées</label>
   </div>
+  <button id="btn-journee" class="stat stat-ecouter" title="Écouter ma journée à voix haute">
+    <span>🔊</span>
+    <label>Ma journée</label>
+  </button>
 </section>
 
 <nav class="filtres" id="filtres">
@@ -51,7 +55,40 @@
 
 <main id="liste-taches"></main>
 
-<button id="btn-ajouter" class="fab" title="Ajouter une tâche">＋</button>
+<button id="btn-ajouter" class="fab fab-petit" title="Écrire une tâche">＋</button>
+<button id="btn-dicter" class="fab" title="Dicter une ou plusieurs tâches">🎤</button>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<datalist id="liste-chantiers"></datalist>
+
+<dialog id="dlg-voix">
+  <div class="voix">
+    <div class="voix-entete">
+      <h2>🎤 Dictez vos tâches</h2>
+      <button type="button" id="v-parole" class="btn-icone" title="Confirmation à voix haute">🔊</button>
+    </div>
+
+    <button type="button" id="v-micro" class="v-micro">
+      <span class="v-onde"></span>
+      <span id="v-etat">Appuyez pour parler</span>
+    </button>
+    <p id="v-aide" class="aide">
+      Parlez naturellement : « demain à 9 h appeler Cotta, c'est urgent,
+      puis vendredi contrôle qualité Néolia Belfort ». Dites <strong>puis</strong>
+      ou <strong>ensuite</strong> entre deux tâches.
+    </p>
+
+    <textarea id="v-texte" rows="3" placeholder="Votre dictée s'écrit ici (vous pouvez la corriger)…"></textarea>
+
+    <div id="v-apercu" class="v-apercu"></div>
+
+    <div class="dlg-boutons">
+      <button type="button" id="v-annuler" class="btn secondaire">Annuler</button>
+      <button type="button" id="v-valider" class="btn primaire" disabled>Ajouter</button>
+    </div>
+  </div>
+</dialog>
 
 <dialog id="dlg-tache">
   <form id="form-tache" novalidate>
@@ -83,7 +120,7 @@
     </div>
 
     <label for="f-site">Site / Chantier</label>
-    <input type="text" id="f-site" placeholder="Ex : Immeuble Le Corail, Niort">
+    <input type="text" id="f-site" list="liste-chantiers" autocomplete="off" placeholder="Ex : Opsat Lure (liste des chantiers)">
 
     <div class="trois-colonnes">
       <div>
@@ -147,6 +184,8 @@
   </form>
 </dialog>
 
+<script src="analyse.js"></script>
 <script src="app.js"></script>
+<script src="dictee.js"></script>
 </body>
 </html>
